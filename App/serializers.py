@@ -1,0 +1,457 @@
+"""
+Serializers for all models.
+
+Handles data validation and transformation for API requests/responses.
+"""
+
+from rest_framework import serializers
+from django.utils import timezone
+from .models import (
+    User,
+    Branch,
+    Department,
+    Employee,
+    Device,
+    DeviceAssignment,
+    RepairRequest,
+    RepairLog,
+    InventorySession,
+    InventoryItem,
+    Notification,
+    AuditLog,
+)
+
+
+# =========================
+# USER SERIALIZERS
+# =========================
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer for User model."""
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "username",
+            "email",
+            "role",
+            "is_active",
+            "date_joined",
+        )
+        read_only_fields = ("id", "date_joined")
+
+
+class UserCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating users."""
+
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    class Meta:
+        model = User
+        fields = ("username", "email", "password", "role")
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
+
+
+# =========================
+# BRANCH SERIALIZERS
+# =========================
+class BranchSerializer(serializers.ModelSerializer):
+    """Serializer for Branch model."""
+
+    manager_name = serializers.CharField(
+        source="manager.full_name", read_only=True
+    )
+
+    class Meta:
+        model = Branch
+        fields = ("id", "name", "location", "manager", "manager_name")
+        read_only_fields = ("id",)
+
+
+# =========================
+# DEPARTMENT SERIALIZERS
+# =========================
+class DepartmentSerializer(serializers.ModelSerializer):
+    """Serializer for Department model."""
+
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+
+    class Meta:
+        model = Department
+        fields = ("id", "name", "branch", "branch_name")
+        read_only_fields = ("id",)
+
+
+# =========================
+# EMPLOYEE SERIALIZERS
+# =========================
+class EmployeeSerializer(serializers.ModelSerializer):
+    """Serializer for Employee model."""
+
+    user_username = serializers.CharField(
+        source="user.username", read_only=True
+    )
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+    department_name = serializers.CharField(
+        source="department.name", read_only=True
+    )
+
+    class Meta:
+        model = Employee
+        fields = (
+            "id",
+            "user",
+            "user_username",
+            "full_name",
+            "position",
+            "branch",
+            "branch_name",
+            "department",
+            "department_name",
+            "status",
+            "hire_date",
+            "exit_date",
+        )
+        read_only_fields = ("id",)
+
+
+class EmployeeListSerializer(serializers.ModelSerializer):
+    """List serializer for Employee model."""
+
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+    status = serializers.CharField()
+
+    class Meta:
+        model = Employee
+        fields = (
+            "id",
+            "full_name",
+            "position",
+            "branch_name",
+            "status",
+        )
+        read_only_fields = ("id",)
+
+
+# =========================
+# DEVICE SERIALIZERS
+# =========================
+class DeviceSerializer(serializers.ModelSerializer):
+    """Serializer for Device model."""
+
+    assigned_employee_name = serializers.CharField(
+        source="assigned_employee.full_name", read_only=True
+    )
+    assigned_branch_name = serializers.CharField(
+        source="assigned_branch.name", read_only=True
+    )
+    days_assigned = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Device
+        fields = (
+            "id",
+            "device_type",
+            "brand",
+            "model",
+            "serial_number",
+            "company_tag",
+            "purchase_date",
+            "warranty_expiry",
+            "status",
+            "assigned_employee",
+            "assigned_employee_name",
+            "assigned_branch",
+            "assigned_branch_name",
+            "location_type",
+            "current_location",
+            "condition_notes",
+            "days_assigned",
+        )
+        read_only_fields = ("id", "days_assigned")
+
+    def get_days_assigned(self, obj):
+        """Calculate days since assignment."""
+        if obj.assigned_employee:
+            from datetime import datetime
+
+            last_assignment = (
+                DeviceAssignment.objects.filter(
+                    device=obj, returned_date__isnull=True
+                )
+                .first()
+            )
+            if last_assignment:
+                return (
+                    timezone.now() - last_assignment.assigned_date
+                ).days
+        return None
+
+
+class DeviceListSerializer(serializers.ModelSerializer):
+    """List serializer for Device model."""
+
+    status = serializers.CharField()
+
+    class Meta:
+        model = Device
+        fields = (
+            "id",
+            "device_type",
+            "serial_number",
+            "company_tag",
+            "status",
+        )
+        read_only_fields = ("id",)
+
+
+# =========================
+# DEVICE ASSIGNMENT SERIALIZERS
+# =========================
+class DeviceAssignmentSerializer(serializers.ModelSerializer):
+    """Serializer for DeviceAssignment model."""
+
+    device_info = DeviceSerializer(source="device", read_only=True)
+    employee_name = serializers.CharField(
+        source="employee.full_name", read_only=True
+    )
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+    assigned_by_username = serializers.CharField(
+        source="assigned_by.username", read_only=True
+    )
+    received_by_username = serializers.CharField(
+        source="received_by.username", read_only=True, allow_null=True
+    )
+    days_assigned = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DeviceAssignment
+        fields = (
+            "id",
+            "device",
+            "device_info",
+            "employee",
+            "employee_name",
+            "branch",
+            "branch_name",
+            "assigned_by",
+            "assigned_by_username",
+            "received_by",
+            "received_by_username",
+            "assigned_date",
+            "returned_date",
+            "condition_on_issue",
+            "condition_on_return",
+            "days_assigned",
+        )
+        read_only_fields = (
+            "id",
+            "assigned_date",
+            "assigned_by",
+            "days_assigned",
+        )
+
+    def get_days_assigned(self, obj):
+        """Calculate days assigned."""
+        if obj.returned_date:
+            return (obj.returned_date - obj.assigned_date).days
+        return (timezone.now() - obj.assigned_date).days
+
+
+class DeviceAssignmentCreateSerializer(serializers.Serializer):
+    """Serializer for creating device assignments."""
+
+    device_id = serializers.IntegerField()
+    employee_id = serializers.IntegerField()
+    condition_on_issue = serializers.CharField(
+        required=False, allow_blank=True
+    )
+
+
+# =========================
+# REPAIR REQUEST SERIALIZERS
+# =========================
+class RepairRequestSerializer(serializers.ModelSerializer):
+    """Serializer for RepairRequest model."""
+
+    device_info = DeviceSerializer(source="device", read_only=True)
+    employee_name = serializers.CharField(
+        source="employee.full_name", read_only=True
+    )
+    approved_by_username = serializers.CharField(
+        source="approved_by.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = RepairRequest
+        fields = (
+            "id",
+            "device",
+            "device_info",
+            "employee",
+            "employee_name",
+            "issue_description",
+            "priority",
+            "status",
+            "request_date",
+            "approved_by",
+            "approved_by_username",
+        )
+        read_only_fields = ("id", "request_date", "approved_by")
+
+
+class RepairRequestListSerializer(serializers.ModelSerializer):
+    """List serializer for RepairRequest model."""
+
+    device_info = serializers.SerializerMethodField()
+    employee_name = serializers.CharField(
+        source="employee.full_name", read_only=True
+    )
+
+    class Meta:
+        model = RepairRequest
+        fields = (
+            "id",
+            "device_info",
+            "employee_name",
+            "issue_description",
+            "priority",
+            "status",
+            "request_date",
+        )
+        read_only_fields = ("id",)
+
+    def get_device_info(self, obj):
+        return {
+            "id": obj.device.id,
+            "company_tag": obj.device.company_tag,
+            "device_type": obj.device.device_type,
+        }
+
+
+# =========================
+# REPAIR LOG SERIALIZERS
+# =========================
+class RepairLogSerializer(serializers.ModelSerializer):
+    """Serializer for RepairLog model."""
+
+    technician_username = serializers.CharField(
+        source="technician.username", read_only=True, allow_null=True
+    )
+    repair_request_info = RepairRequestListSerializer(
+        source="repair_request", read_only=True
+    )
+
+    class Meta:
+        model = RepairLog
+        fields = (
+            "id",
+            "repair_request",
+            "repair_request_info",
+            "technician",
+            "technician_username",
+            "notes",
+            "parts_used",
+            "start_date",
+            "completed_date",
+        )
+        read_only_fields = ("id", "start_date")
+
+
+# =========================
+# INVENTORY SESSION SERIALIZERS
+# =========================
+class InventorySessionSerializer(serializers.ModelSerializer):
+    """Serializer for InventorySession model."""
+
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+    created_by_username = serializers.CharField(
+        source="created_by.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = InventorySession
+        fields = (
+            "id",
+            "branch",
+            "branch_name",
+            "start_date",
+            "end_date",
+            "created_by",
+            "created_by_username",
+            "approved_by_branch",
+            "approved_by_head_office",
+        )
+        read_only_fields = ("id", "created_by", "created_by_username")
+
+
+# =========================
+# INVENTORY ITEM SERIALIZERS
+# =========================
+class InventoryItemSerializer(serializers.ModelSerializer):
+    """Serializer for InventoryItem model."""
+
+    device_info = DeviceSerializer(source="device", read_only=True)
+
+    class Meta:
+        model = InventoryItem
+        fields = (
+            "id",
+            "session",
+            "device",
+            "device_info",
+            "status",
+            "comment",
+        )
+        read_only_fields = ("id",)
+
+
+# =========================
+# NOTIFICATION SERIALIZERS
+# =========================
+class NotificationSerializer(serializers.ModelSerializer):
+    """Serializer for Notification model."""
+
+    class Meta:
+        model = Notification
+        fields = ("id", "user", "message", "is_read", "created_at")
+        read_only_fields = ("id", "created_at")
+
+
+# =========================
+# AUDIT LOG SERIALIZERS
+# =========================
+class AuditLogSerializer(serializers.ModelSerializer):
+    """Serializer for AuditLog model."""
+
+    user_username = serializers.CharField(
+        source="user.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = AuditLog
+        fields = (
+            "id",
+            "user",
+            "user_username",
+            "action",
+            "model_name",
+            "object_id",
+            "timestamp",
+            "details",
+        )
+        read_only_fields = (
+            "id",
+            "timestamp",
+            "user",
+            "action",
+            "model_name",
+            "object_id",
+            "details",
+        )

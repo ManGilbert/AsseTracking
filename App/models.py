@@ -1,0 +1,314 @@
+from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.conf import settings
+
+
+# =========================
+# USER MANAGER
+# =========================
+class UserManager(BaseUserManager):
+    def create_user(self, username, email, password=None, role='EMPLOYEE'):
+        if not email:
+            raise ValueError("User must have an email")
+
+        email = self.normalize_email(email)
+
+        user = self.model(
+            username=username,
+            email=email,
+            role=role
+        )
+
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, username, email, password):
+        user = self.create_user(username, email, password, role='HEAD_OFFICE')
+        user.is_staff = True
+        user.is_superuser = True
+        user.save(using=self._db)
+        return user
+
+
+# =========================
+# USER
+# =========================
+class User(AbstractBaseUser, PermissionsMixin):
+    ROLE_CHOICES = [
+        ('HEAD_OFFICE', 'Head Office'),
+        ('BRANCH_MANAGER', 'Branch Manager'),
+        ('TECHNICIAN', 'Technician'),
+        ('EMPLOYEE', 'Employee'),
+    ]
+
+    username = models.CharField(max_length=150, unique=True)
+    email = models.EmailField(unique=True)
+
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='EMPLOYEE')
+
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    date_joined = models.DateTimeField(auto_now_add=True)
+
+    objects = UserManager()
+
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email']
+
+    def __str__(self):
+        return self.username
+
+
+# =========================
+# BRANCH
+# =========================
+class Branch(models.Model):
+    name = models.CharField(max_length=255)
+    location = models.CharField(max_length=255)
+
+    manager = models.ForeignKey(
+        'Employee',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='managed_branches'
+    )
+
+    def __str__(self):
+        return self.name
+
+
+# =========================
+# DEPARTMENT
+# =========================
+class Department(models.Model):
+    name = models.CharField(max_length=255)
+
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.CASCADE,
+        related_name='departments'
+    )
+
+    def __str__(self):
+        return f"{self.name} ({self.branch})"
+
+
+# =========================
+# EMPLOYEE
+# =========================
+class Employee(models.Model):
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Active'),
+        ('INACTIVE', 'Inactive'),
+        ('EXITED', 'Exited'),
+    ]
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+
+    full_name = models.CharField(max_length=255)
+    position = models.CharField(max_length=255)
+
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, related_name='employees')
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='ACTIVE')
+
+    hire_date = models.DateField()
+    exit_date = models.DateField(null=True, blank=True)
+
+    def __str__(self):
+        return self.full_name
+
+
+# =========================
+# DEVICE
+# =========================
+class Device(models.Model):
+    STATUS_CHOICES = [
+        ('AVAILABLE', 'Available'),
+        ('ASSIGNED', 'Assigned'),
+        ('PENDING_RETURN', 'Pending Return'),
+        ('IN_REPAIR', 'In Repair'),
+        ('REPAIRED', 'Repaired'),
+        ('MISSING', 'Missing'),
+        ('RETIRED', 'Retired'),
+    ]
+
+    LOCATION_CHOICES = [
+        ('HEAD_OFFICE', 'Head Office'),
+        ('BRANCH', 'Branch'),
+        ('EMPLOYEE', 'Employee'),
+    ]
+
+    device_type = models.CharField(max_length=50)
+    brand = models.CharField(max_length=100)
+    model = models.CharField(max_length=100)
+
+    serial_number = models.CharField(max_length=100, unique=True)
+    company_tag = models.CharField(max_length=100, unique=True)  # QR / Barcode
+
+    purchase_date = models.DateField(null=True, blank=True)
+    warranty_expiry = models.DateField(null=True, blank=True)
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
+
+    assigned_employee = models.ForeignKey('Employee', null=True, blank=True, on_delete=models.SET_NULL)
+    assigned_branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL)
+
+    location_type = models.CharField(max_length=20, choices=LOCATION_CHOICES, default='HEAD_OFFICE')
+    current_location = models.CharField(max_length=255, default="Head Office")
+
+    condition_notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.device_type} - {self.company_tag}"
+
+
+# =========================
+# DEVICE ASSIGNMENT
+# =========================
+class DeviceAssignment(models.Model):
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='assignments')
+
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True)
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True)
+
+    assigned_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='assigned_devices')
+    received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    assigned_date = models.DateTimeField(auto_now_add=True)
+    returned_date = models.DateTimeField(null=True, blank=True)
+
+    condition_on_issue = models.TextField(blank=True)
+    condition_on_return = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['device'],
+                condition=models.Q(returned_date__isnull=True),
+                name='unique_active_assignment'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.device} -> {self.employee}"
+
+
+# =========================
+# REPAIR REQUEST
+# =========================
+class RepairRequest(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed'),
+    ]
+
+    device = models.ForeignKey(Device, on_delete=models.CASCADE)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+
+    issue_description = models.TextField()
+    priority = models.CharField(max_length=20, default='NORMAL')
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+
+    request_date = models.DateTimeField(auto_now_add=True)
+    approved_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+
+    def __str__(self):
+        return f"{self.device} - {self.status}"
+
+
+# =========================
+# REPAIR LOG
+# =========================
+class RepairLog(models.Model):
+    repair_request = models.OneToOneField(RepairRequest, on_delete=models.CASCADE)
+
+    technician = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
+
+    notes = models.TextField()
+    parts_used = models.TextField(blank=True)
+
+    start_date = models.DateTimeField(auto_now_add=True)
+    completed_date = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Repair - {self.repair_request.device}"
+
+
+# =========================
+# INVENTORY SESSION
+# =========================
+class InventorySession(models.Model):
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE)
+
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField(null=True, blank=True)
+
+    created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
+
+    approved_by_branch = models.BooleanField(default=False)
+    approved_by_head_office = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.branch} Inventory"
+
+
+# =========================
+# INVENTORY ITEM
+# =========================
+class InventoryItem(models.Model):
+    STATUS_CHOICES = [
+        ('VERIFIED', 'Verified'),
+        ('MISSING', 'Missing'),
+    ]
+
+    session = models.ForeignKey(InventorySession, on_delete=models.CASCADE, related_name='items')
+    device = models.ForeignKey(Device, on_delete=models.CASCADE)
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    comment = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ['session', 'device']
+
+
+# =========================
+# NOTIFICATION
+# =========================
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Notification for {self.user}"
+
+
+# =========================
+# AUDIT LOG
+# =========================
+class AuditLog(models.Model):
+    user = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
+
+    action = models.CharField(max_length=255)
+    model_name = models.CharField(max_length=100)
+
+    object_id = models.IntegerField(null=True, blank=True)
+
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    details = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"{self.action} - {self.timestamp}"
