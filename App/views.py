@@ -11,6 +11,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
+from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect
+from django.urls import reverse
 
 from .models import (
     User,
@@ -61,6 +66,7 @@ from .permissions import (
     CanVerifyInventory,
     CanCreateInventorySession,
 )
+from .decorators import role_required
 
 from .services import (
     DeviceAssignmentService,
@@ -768,3 +774,81 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ["action", "model_name"]
     search_fields = ["action", "details"]
     ordering = ["-timestamp"]
+
+
+def _get_dashboard_url(role):
+    role_dashboard_map = {
+        "HEAD_OFFICE": "head_office_dashboard",
+        "BRANCH_MANAGER": "branch_manager_dashboard",
+        "EMPLOYEE": "employee_dashboard",
+        "TECHNICIAN": "technician_dashboard",
+    }
+    return reverse(role_dashboard_map.get(role, "login"))
+
+
+def home_view(request):
+    """Root view: redirect to login if not authenticated, dashboard if authenticated."""
+    if request.user.is_authenticated:
+        return redirect(_get_dashboard_url(request.user.role))
+    return redirect("login")
+
+
+def login_view(request):
+    if request.method == "POST":
+        username_or_email = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "")
+
+        # Try to authenticate with username first
+        user = authenticate(request, username=username_or_email, password=password)
+
+        # If that fails, try with email
+        if user is None:
+            try:
+                user_obj = User.objects.get(email=username_or_email)
+                user = authenticate(request, username=user_obj.username, password=password)
+            except User.DoesNotExist:
+                pass
+
+        if user is not None and user.is_active:
+            login(request, user)
+            return redirect(_get_dashboard_url(user.role))
+
+        messages.error(request, "Invalid username/email or password")
+        return render(request, "Auth/login.html", {"username": username_or_email})
+
+    return render(request, "Auth/login.html")
+
+
+@login_required
+def logout_view(request):
+    logout(request)
+    return redirect("login")
+
+
+@login_required
+def dashboard_redirect(request):
+    return redirect(_get_dashboard_url(request.user.role))
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_dashboard(request):
+    return render(request, "HeadOffice/Dashboard.html")
+
+
+@login_required
+@role_required("BRANCH_MANAGER")
+def branch_manager_dashboard(request):
+    return render(request, "BranchManage/Dashboard.html")
+
+
+@login_required
+@role_required("EMPLOYEE")
+def employee_dashboard(request):
+    return render(request, "Employee/Dashboard.html")
+
+
+@login_required
+@role_required("TECHNICIAN")
+def technician_dashboard(request):
+    return render(request, "Technician/Dashboard.html")

@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-kzisvminvk=a9=@0d+^n+my_cjzc89yqhv1fzx-&28s12fp%6j
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*', 'testserver', 'localhost', '127.0.0.1']
 
 
 # Application definition
@@ -90,6 +90,10 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'AsseTracking.urls'
+
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/dashboard/'
+LOGOUT_REDIRECT_URL = '/login/'
 
 TEMPLATES = [
     {

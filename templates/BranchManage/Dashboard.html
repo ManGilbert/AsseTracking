@@ -1,8 +1,16 @@
-{% extends 'Base.html' %}
+{% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Title{% endblock %}
+{% block title %}Branch Manager Dashboard{% endblock %}
 
 {% block content %}
-<h1>Hello</h1>
+<div class="container py-5">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-3">Branch Manager Dashboard</h1>
+            <p class="lead">Welcome back, {{ request.user.get_full_name|default:request.user.username }}.</p>
+            <p>Manage branch operations, inventory checks, and team assignments from here.</p>
+        </div>
+    </div>
+</div>
 {% endblock %}
