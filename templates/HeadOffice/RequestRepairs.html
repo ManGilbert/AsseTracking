@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Repair Management - Head Office{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="feather-wrench me-2"></i>Repair Management</h1>
+                    <p class="text-muted mb-0">Review, approve, and track device repairs</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-2">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Pending</h6>
+                    <h2 class="mb-0">{{ repairs_by_status.PENDING|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Approved</h6>
+                    <h2 class="mb-0">{{ repairs_by_status.APPROVED|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">In Progress</h6>
+                    <h2 class="mb-0">{{ repairs_by_status.IN_PROGRESS|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Completed</h6>
+                    <h2 class="mb-0">{{ repairs_by_status.COMPLETED|length }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Repair Requests Tabs -->
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button">
+                <i class="feather-alert-circle me-1"></i>Pending ({{ repairs_by_status.PENDING|length }})
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="approved-tab" data-bs-toggle="tab" data-bs-target="#approved" type="button">
+                <i class="feather-check me-1"></i>Approved ({{ repairs_by_status.APPROVED|length }})
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="progress-tab" data-bs-toggle="tab" data-bs-target="#progress" type="button">
+                <i class="feather-zap me-1"></i>In Progress ({{ repairs_by_status.IN_PROGRESS|length }})
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button">
+                <i class="feather-check-circle me-1"></i>Completed ({{ repairs_by_status.COMPLETED|length }})
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+        <!-- Pending Repairs -->
+        <div class="tab-pane fade show active" id="pending" role="tabpanel">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Device</th>
+                                    <th>Employee</th>
+                                    <th>Issue</th>
+                                    <th>Priority</th>
+                                    <th>Date</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for repair in repairs_by_status.PENDING %}
+                                <tr>
+                                    <td><strong class="badge bg-info">{{ repair.device.company_tag }}</strong></td>
+                                    <td>{{ repair.employee.full_name }}</td>
+                                    <td>{{ repair.issue_description|truncatechars:50 }}</td>
+                                    <td>
+                                        <span class="badge {% if repair.priority == 'HIGH' %}bg-danger{% else %}bg-info{% endif %}">
+                                            {{ repair.priority }}
+                                        </span>
+                                    </td>
+                                    <td>{{ repair.request_date|date:"M d, H:i" }}</td>
+                                    <td class="text-end">
+                                        <div class="hstack gap-1 justify-content-end">
+                                            <button class="btn btn-sm btn-outline-success" onclick="approveRepair({{ repair.id }})">
+                                                <i class="feather-check me-1"></i>Approve
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="rejectRepair({{ repair.id }})">
+                                                <i class="feather-x me-1"></i>Reject
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">No pending repairs</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Approved Repairs -->
+        <div class="tab-pane fade" id="approved" role="tabpanel">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Device</th>
+                                    <th>Employee</th>
+                                    <th>Approved By</th>
+                                    <th>Issue</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for repair in repairs_by_status.APPROVED %}
+                                <tr>
+                                    <td><strong class="badge bg-info">{{ repair.device.company_tag }}</strong></td>
+                                    <td>{{ repair.employee.full_name }}</td>
+                                    <td>{{ repair.approved_by.username }}</td>
+                                    <td>{{ repair.issue_description|truncatechars:50 }}</td>
+                                    <td>{{ repair.request_date|date:"M d, H:i" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">No approved repairs</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- In Progress -->
+        <div class="tab-pane fade" id="progress" role="tabpanel">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Device</th>
+                                    <th>Employee</th>
+                                    <th>Issue</th>
+                                    <th>Priority</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for repair in repairs_by_status.IN_PROGRESS %}
+                                <tr>
+                                    <td><strong class="badge bg-warning">{{ repair.device.company_tag }}</strong></td>
+                                    <td>{{ repair.employee.full_name }}</td>
+                                    <td>{{ repair.issue_description|truncatechars:50 }}</td>
+                                    <td><span class="badge bg-warning">{{ repair.priority }}</span></td>
+                                    <td>{{ repair.request_date|date:"M d, H:i" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">No repairs in progress</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completed -->
+        <div class="tab-pane fade" id="completed" role="tabpanel">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Device</th>
+                                    <th>Employee</th>
+                                    <th>Issue</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for repair in repairs_by_status.COMPLETED %}
+                                <tr>
+                                    <td><strong class="badge bg-success">{{ repair.device.company_tag }}</strong></td>
+                                    <td>{{ repair.employee.full_name }}</td>
+                                    <td>{{ repair.issue_description|truncatechars:50 }}</td>
+                                    <td>{{ repair.request_date|date:"M d, H:i" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">No completed repairs</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function approveRepair(repairId) {
+    if (!confirm('Approve this repair request?')) return;
+    
+    fetch(`/api/repair-requests/${repairId}/approve/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else alert('Error approving repair');
+    });
+}
+
+function rejectRepair(repairId) {
+    if (!confirm('Reject this repair request?')) return;
+    
+    fetch(`/api/repair-requests/${repairId}/reject/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else alert('Error rejecting repair');
+    });
+}
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+</script>
+{% endblock %}

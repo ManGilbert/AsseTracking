@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Audit Logs - Head Office{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div>
+                <h1 class="h3 mb-0"><i class="feather-book-open me-2"></i>System Audit Logs</h1>
+                <p class="text-muted mb-0">View all system activities and changes</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <input type="text" class="form-control" id="searchAction" placeholder="Search by action or details...">
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select" id="filterAction">
+                                <option value="">All Actions</option>
+                                {% for action in actions %}
+                                <option value="{{ action }}">{{ action }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                                <i class="feather-refresh-cw me-1"></i>Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Logs Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Activity Log</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Model</th>
+                                    <th>Details</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in audit_logs %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar-text bg-soft-primary text-primary avatar-sm">
+                                                {{ log.user.username|first|upper }}
+                                            </div>
+                                            <div>
+                                                <strong>{{ log.user.username|default:"System" }}</strong>
+                                                <div class="small text-muted">{{ log.user.email|default:"" }}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if 'CREATED' in log.action %}bg-success
+                                            {% elif 'DELETED' in log.action %}bg-danger
+                                            {% elif 'UPDATED' in log.action %}bg-info
+                                            {% elif 'ASSIGNED' in log.action %}bg-warning
+                                            {% elif 'RETURNED' in log.action %}bg-info
+                                            {% elif 'EXITED' in log.action %}bg-danger
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ log.action }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <strong>{{ log.model_name }}</strong>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted" title="{{ log.details }}">
+                                            {{ log.details|truncatechars:60 }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ log.timestamp|date:"M d, Y H:i" }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        No audit logs found
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">Action Types Legend</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <span class="badge bg-success me-2">CREATED</span>
+                                <small>New record created</small>
+                            </div>
+                            <div class="mb-3">
+                                <span class="badge bg-danger me-2">DELETED</span>
+                                <small>Record deleted</small>
+                            </div>
+                            <div class="mb-3">
+                                <span class="badge bg-info me-2">UPDATED</span>
+                                <small>Record updated</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <span class="badge bg-warning me-2">ASSIGNED</span>
+                                <small>Device or task assigned</small>
+                            </div>
+                            <div class="mb-3">
+                                <span class="badge bg-info me-2">RETURNED</span>
+                                <small>Device returned</small>
+                            </div>
+                            <div class="mb-3">
+                                <span class="badge bg-danger me-2">EXITED</span>
+                                <small>Employee marked as exited</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchAction');
+    const actionFilter = document.getElementById('filterAction');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', filterLogs);
+    }
+    if (actionFilter) {
+        actionFilter.addEventListener('change', filterLogs);
+    }
+});
+
+function filterLogs() {
+    const searchTerm = document.getElementById('searchAction').value.toLowerCase();
+    const actionFilter = document.getElementById('filterAction').value;
+    const rows = document.querySelectorAll('table tbody tr');
+    
+    rows.forEach(row => {
+        let show = true;
+        
+        // Check action filter
+        if (actionFilter) {
+            const actionCell = row.querySelector('td:nth-child(2)');
+            if (!actionCell.textContent.includes(actionFilter)) {
+                show = false;
+            }
+        }
+        
+        // Check search term
+        if (searchTerm) {
+            const rowText = row.textContent.toLowerCase();
+            if (!rowText.includes(searchTerm)) {
+                show = false;
+            }
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function resetFilters() {
+    document.getElementById('searchAction').value = '';
+    document.getElementById('filterAction').value = '';
+    filterLogs();
+}
+</script>
+{% endblock %}

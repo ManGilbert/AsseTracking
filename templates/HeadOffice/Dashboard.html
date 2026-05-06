@@ -4,13 +4,583 @@
 {% block title %}Head Office Dashboard{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row">
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
         <div class="col-12">
-            <h1 class="mb-3">Head Office Dashboard</h1>
-            <p class="lead">Welcome back, {{ request.user.get_full_name|default:request.user.username }}.</p>
-            <p>This area is reserved for head office operations and reporting.</p>
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="feather-briefcase me-2"></i>Head Office Dashboard</h1>
+                    <p class="text-muted mb-0">System Overview & Control Center</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'admin:index' %}" class="btn btn-outline-secondary" target="_blank">
+                        <i class="feather-settings me-1"></i>Admin Panel
+                    </a>
+                    <button class="btn btn-outline-primary" onclick="location.reload()">
+                        <i class="feather-refresh-cw me-1"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Metrics Section -->
+    <div class="row mb-4">
+        <!-- Total Devices -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-start border-primary border-3 h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title text-muted mb-1">Total Devices</h6>
+                            <h2 class="mb-0">{{ total_devices }}</h2>
+                            <small class="text-muted">
+                                <i class="feather-trending-up text-success"></i> All devices in system
+                            </small>
+                        </div>
+                        <div class="avatar-text bg-soft-primary text-primary fs-2">
+                            <i class="feather-cpu"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assigned Devices -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-start border-info border-3 h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title text-muted mb-1">Assigned</h6>
+                            <h2 class="mb-0">{{ assigned_devices }}</h2>
+                            <small class="text-muted">
+                                <span class="badge bg-info">{{ percentage_assigned }}%</span> of total
+                            </small>
+                        </div>
+                        <div class="avatar-text bg-soft-info text-info fs-2">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Available Devices -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-start border-success border-3 h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title text-muted mb-1">Available</h6>
+                            <h2 class="mb-0">{{ available_devices }}</h2>
+                            <small class="text-muted">
+                                <span class="badge bg-success">Ready to assign</span>
+                            </small>
+                        </div>
+                        <div class="avatar-text bg-soft-success text-success fs-2">
+                            <i class="feather-inbox"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- In Repair / Missing -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-start border-danger border-3 h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title text-muted mb-1">Issues</h6>
+                            <h2 class="mb-0">{{ in_repair_devices }}</h2>
+                            <small class="text-muted">
+                                <span class="badge bg-warning">{{ missing_devices }} Missing</span>
+                            </small>
+                        </div>
+                        <div class="avatar-text bg-soft-danger text-danger fs-2">
+                            <i class="feather-alert-triangle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employee & Branch Metrics -->
+    <div class="row mb-4">
+        <!-- Total Employees -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title text-muted mb-1">Employees</h6>
+                            <h2 class="mb-0">{{ total_employees }}</h2>
+                            <div class="small text-muted mt-2">
+                                <span class="badge bg-success">{{ active_employees }} Active</span>
+                                <span class="badge bg-warning">{{ inactive_employees }} Inactive</span>
+                            </div>
+                        </div>
+                        <div class="avatar-text bg-soft-primary text-primary fs-2">
+                            <i class="feather-users"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Branches -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title text-muted mb-1">Branches</h6>
+                            <h2 class="mb-0">{{ total_branches }}</h2>
+                            <small class="text-muted">
+                                <i class="feather-map-pin"></i> Locations managed
+                            </small>
+                        </div>
+                        <div class="avatar-text bg-soft-success text-success fs-2">
+                            <i class="feather-map"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Repair Requests -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="card-title text-muted mb-1">Repairs</h6>
+                            <h2 class="mb-0">{{ pending_repairs }}</h2>
+                            <div class="small text-muted mt-2">
+                                <span class="badge bg-warning">{{ pending_repairs }} Pending</span>
+                                <span class="badge bg-info">{{ approved_repairs }} Approved</span>
+                            </div>
+                        </div>
+                        <div class="avatar-text bg-soft-warning text-warning fs-2">
+                            <i class="feather-wrench"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title text-muted mb-3">Quick Actions</h6>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'head_office_devices' %}" class="btn btn-sm btn-outline-primary">
+                            <i class="feather-plus me-1"></i>New Device
+                        </a>
+                        <a href="{% url 'head_office_employees' %}" class="btn btn-sm btn-outline-info">
+                            <i class="feather-user-plus me-1"></i>New Employee
+                        </a>
+                        <a href="{% url 'head_office_assignments' %}" class="btn btn-sm btn-outline-success">
+                            <i class="feather-arrow-right me-1"></i>Assign Device
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="row mb-4">
+        <!-- Device Status Chart -->
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Device Status Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="deviceStatusChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Type Chart -->
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Devices by Type</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="deviceTypeChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Devices by Branch -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Devices per Branch</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="branchDeviceChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Repair Status -->
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Repair Requests Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span class="badge bg-warning">Pending</span>
+                            <strong>{{ pending_repairs }}</strong>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span class="badge bg-info">Approved</span>
+                            <strong>{{ approved_repairs }}</strong>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between">
+                            <span class="badge bg-success">Completed</span>
+                            <strong>{{ completed_repairs }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activities & Repairs -->
+    <div class="row">
+        <!-- Recent Activities -->
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Recent Activities</h5>
+                    <a href="{% url 'head_office_audit_logs' %}" class="btn btn-sm btn-outline-secondary">
+                        View All
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for audit in recent_audits %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ audit.user.username|default:"System" }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ audit.action }}</span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ audit.timestamp|date:"M d, H:i" }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-3">
+                                        No recent activities
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Repair Requests -->
+        <div class="col-lg-6 mb-3">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Recent Repair Requests</h5>
+                    <a href="{% url 'head_office_repairs' %}" class="btn btn-sm btn-outline-secondary">
+                        View All
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Device</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for repair in recent_repairs %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ repair.device.company_tag }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if repair.status == 'PENDING' %}bg-warning
+                                            {% elif repair.status == 'APPROVED' %}bg-info
+                                            {% elif repair.status == 'COMPLETED' %}bg-success
+                                            {% elif repair.status == 'REJECTED' %}bg-danger
+                                            {% endif %}">
+                                            {{ repair.status }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if repair.priority == 'HIGH' %}bg-danger
+                                            {% elif repair.priority == 'NORMAL' %}bg-info
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ repair.priority }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ repair.request_date|date:"M d, H:i" }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-3">
+                                        No repair requests
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Overview Section -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Management Modules</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <a href="{% url 'head_office_employees' %}" class="card text-decoration-none border-hover">
+                                <div class="card-body text-center py-4">
+                                    <div class="avatar-text bg-soft-primary text-primary fs-1 mb-3">
+                                        <i class="feather-users"></i>
+                                    </div>
+                                    <h6 class="card-title">Employee Management</h6>
+                                    <p class="text-muted small">Create, edit, and manage employees</p>
+                                </div>
+                            </a>
+                        </div>
+
+                        <div class="col-md-4">
+                            <a href="{% url 'head_office_branches' %}" class="card text-decoration-none border-hover">
+                                <div class="card-body text-center py-4">
+                                    <div class="avatar-text bg-soft-info text-info fs-1 mb-3">
+                                        <i class="feather-map"></i>
+                                    </div>
+                                    <h6 class="card-title">Branch Management</h6>
+                                    <p class="text-muted small">Manage branches and departments</p>
+                                </div>
+                            </a>
+                        </div>
+
+                        <div class="col-md-4">
+                            <a href="{% url 'head_office_devices' %}" class="card text-decoration-none border-hover">
+                                <div class="card-body text-center py-4">
+                                    <div class="avatar-text bg-soft-success text-success fs-1 mb-3">
+                                        <i class="feather-cpu"></i>
+                                    </div>
+                                    <h6 class="card-title">Device Management</h6>
+                                    <p class="text-muted small">Register and manage devices</p>
+                                </div>
+                            </a>
+                        </div>
+
+                        <div class="col-md-4">
+                            <a href="{% url 'head_office_assignments' %}" class="card text-decoration-none border-hover">
+                                <div class="card-body text-center py-4">
+                                    <div class="avatar-text bg-soft-warning text-warning fs-1 mb-3">
+                                        <i class="feather-arrow-right"></i>
+                                    </div>
+                                    <h6 class="card-title">Device Assignments</h6>
+                                    <p class="text-muted small">Assign and track devices</p>
+                                </div>
+                            </a>
+                        </div>
+
+                        <div class="col-md-4">
+                            <a href="{% url 'head_office_repairs' %}" class="card text-decoration-none border-hover">
+                                <div class="card-body text-center py-4">
+                                    <div class="avatar-text bg-soft-danger text-danger fs-1 mb-3">
+                                        <i class="feather-wrench"></i>
+                                    </div>
+                                    <h6 class="card-title">Repair Management</h6>
+                                    <p class="text-muted small">Approve and track repairs</p>
+                                </div>
+                            </a>
+                        </div>
+
+                        <div class="col-md-4">
+                            <a href="{% url 'head_office_inventory' %}" class="card text-decoration-none border-hover">
+                                <div class="card-body text-center py-4">
+                                    <div class="avatar-text bg-soft-secondary text-secondary fs-1 mb-3">
+                                        <i class="feather-inbox"></i>
+                                    </div>
+                                    <h6 class="card-title">Inventory Management</h6>
+                                    <p class="text-muted small">Track inventory sessions</p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+.border-hover {
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.border-hover:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.15);
+    transform: translateY(-2px);
+}
+
+.card {
+    border: 1px solid #e9ecef;
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Device Status Chart
+    const statusCtx = document.getElementById('deviceStatusChart');
+    if (statusCtx) {
+        const statusData = {{ device_status_data|safe }};
+        const statusLabels = statusData.map(item => item.status);
+        const statusCounts = statusData.map(item => item.count);
+        
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: statusLabels,
+                datasets: [{
+                    data: statusCounts,
+                    backgroundColor: [
+                        '#28a745', // AVAILABLE - green
+                        '#0dcaf0', // ASSIGNED - cyan
+                        '#ffc107', // PENDING_RETURN - warning
+                        '#fd7e14', // IN_REPAIR - orange
+                        '#6f42c1', // REPAIRED - purple
+                        '#dc3545', // MISSING - red
+                        '#6c757d'  // RETIRED - gray
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+    }
+
+    // Device Type Chart
+    const typeCtx = document.getElementById('deviceTypeChart');
+    if (typeCtx) {
+        const typeData = {{ device_type_data|safe }};
+        const typeLabels = typeData.map(item => item.device_type);
+        const typeCounts = typeData.map(item => item.count);
+        
+        new Chart(typeCtx, {
+            type: 'bar',
+            data: {
+                labels: typeLabels,
+                datasets: [{
+                    label: 'Count',
+                    data: typeCounts,
+                    backgroundColor: '#0d6efd',
+                    borderColor: '#0d6efd',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                indexAxis: 'y',
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    // Devices per Branch Chart
+    const branchCtx = document.getElementById('branchDeviceChart');
+    if (branchCtx) {
+        const branchData = {{ branch_device_data|safe }};
+        const branchLabels = branchData.map(item => item.assigned_branch__name || 'Unassigned');
+        const branchCounts = branchData.map(item => item.count);
+        
+        new Chart(branchCtx, {
+            type: 'bar',
+            data: {
+                labels: branchLabels,
+                datasets: [{
+                    label: 'Devices',
+                    data: branchCounts,
+                    backgroundColor: '#198754',
+                    borderColor: '#198754',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

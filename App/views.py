@@ -833,7 +833,82 @@ def dashboard_redirect(request):
 @login_required
 @role_required("HEAD_OFFICE")
 def head_office_dashboard(request):
-    return render(request, "HeadOffice/Dashboard.html")
+    """Head Office Dashboard with complete system overview."""
+    from django.db.models import Count, Q
+    
+    # Device Statistics
+    total_devices = Device.objects.count()
+    assigned_devices = Device.objects.filter(status='ASSIGNED').count()
+    available_devices = Device.objects.filter(status='AVAILABLE').count()
+    in_repair_devices = Device.objects.filter(status='IN_REPAIR').count()
+    missing_devices = Device.objects.filter(status='MISSING').count()
+    
+    # Calculate percentages
+    percentage_assigned = round((assigned_devices / total_devices * 100) if total_devices > 0 else 0, 1)
+    
+    # Employee Statistics
+    total_employees = Employee.objects.count()
+    active_employees = Employee.objects.filter(status='ACTIVE').count()
+    inactive_employees = Employee.objects.filter(status='INACTIVE').count()
+    exited_employees = Employee.objects.filter(status='EXITED').count()
+    
+    # Branch Statistics
+    total_branches = Branch.objects.count()
+    
+    # Repair Statistics
+    pending_repairs = RepairRequest.objects.filter(status='PENDING').count()
+    approved_repairs = RepairRequest.objects.filter(status='APPROVED').count()
+    completed_repairs = RepairRequest.objects.filter(status='COMPLETED').count()
+    
+    # Recent Activities
+    recent_audits = AuditLog.objects.select_related('user').order_by('-timestamp')[:10]
+    
+    # Recent Repair Requests
+    recent_repairs = RepairRequest.objects.select_related('device', 'employee', 'approved_by').order_by('-request_date')[:5]
+    
+    # Device Status Distribution for Charts
+    device_status_data = Device.objects.values('status').annotate(count=Count('id'))
+    
+    # Device Type Distribution
+    device_type_data = Device.objects.values('device_type').annotate(count=Count('id'))
+    
+    # Devices per Branch
+    branch_device_data = Device.objects.values('assigned_branch__name').annotate(count=Count('id')).exclude(assigned_branch__isnull=True)
+    
+    context = {
+        # Key Metrics
+        'total_devices': total_devices,
+        'assigned_devices': assigned_devices,
+        'available_devices': available_devices,
+        'in_repair_devices': in_repair_devices,
+        'missing_devices': missing_devices,
+        'percentage_assigned': percentage_assigned,
+        
+        # Employee Metrics
+        'total_employees': total_employees,
+        'active_employees': active_employees,
+        'inactive_employees': inactive_employees,
+        'exited_employees': exited_employees,
+        
+        # Branch Metrics
+        'total_branches': total_branches,
+        
+        # Repair Metrics
+        'pending_repairs': pending_repairs,
+        'approved_repairs': approved_repairs,
+        'completed_repairs': completed_repairs,
+        
+        # Lists
+        'recent_audits': recent_audits,
+        'recent_repairs': recent_repairs,
+        
+        # Chart Data
+        'device_status_data': list(device_status_data),
+        'device_type_data': list(device_type_data),
+        'branch_device_data': list(branch_device_data),
+    }
+    
+    return render(request, "HeadOffice/Dashboard.html", context)
 
 
 @login_required
@@ -852,3 +927,142 @@ def employee_dashboard(request):
 @role_required("TECHNICIAN")
 def technician_dashboard(request):
     return render(request, "Technician/Dashboard.html")
+
+
+# =========================
+# HEAD OFFICE MANAGEMENT VIEWS
+# =========================
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_employees(request):
+    """Employee management view."""
+    employees = Employee.objects.select_related('user', 'branch', 'department').all()
+    branches = Branch.objects.all()
+    departments = Department.objects.all()
+    users = User.objects.filter(role__in=['EMPLOYEE', 'BRANCH_MANAGER', 'TECHNICIAN'])
+    
+    context = {
+        'employees': employees,
+        'branches': branches,
+        'departments': departments,
+        'users': users,
+        'statuses': Employee._meta.get_field('status').choices,
+    }
+    return render(request, "HeadOffice/Employee.html", context)
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_branches(request):
+    """Branch and department management view."""
+    branches = Branch.objects.prefetch_related('departments', 'employees').all()
+    context = {
+        'branches': branches,
+    }
+    return render(request, "HeadOffice/Branches.html", context)
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_devices(request):
+    """Device management view."""
+    devices = Device.objects.select_related('assigned_employee', 'assigned_branch').all()
+    branches = Branch.objects.all()
+    statuses = Device._meta.get_field('status').choices
+    device_types = Device.objects.values_list('device_type', flat=True).distinct()
+    
+    context = {
+        'devices': devices,
+        'branches': branches,
+        'statuses': statuses,
+        'device_types': device_types,
+    }
+    return render(request, "HeadOffice/Devices.html", context)
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_assignments(request):
+    """Device assignment management view."""
+    assignments = DeviceAssignment.objects.select_related(
+        'device', 'employee', 'branch', 'assigned_by', 'received_by'
+    ).all().order_by('-assigned_date')
+    
+    active_assignments = assignments.filter(returned_date__isnull=True)
+    returned_assignments = assignments.filter(returned_date__isnull=False)
+    
+    employees = Employee.objects.filter(status='ACTIVE')
+    branches = Branch.objects.all()
+    
+    context = {
+        'assignments': assignments,
+        'active_assignments': active_assignments,
+        'returned_assignments': returned_assignments,
+        'employees': employees,
+        'branches': branches,
+    }
+    return render(request, "HeadOffice/Assignments.html", context)
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_repairs(request):
+    """Repair request management view."""
+    repairs = RepairRequest.objects.select_related(
+        'device', 'employee', 'approved_by'
+    ).all().order_by('-request_date')
+    
+    repairs_by_status = {
+        'PENDING': repairs.filter(status='PENDING'),
+        'APPROVED': repairs.filter(status='APPROVED'),
+        'REJECTED': repairs.filter(status='REJECTED'),
+        'IN_PROGRESS': repairs.filter(status='IN_PROGRESS'),
+        'COMPLETED': repairs.filter(status='COMPLETED'),
+    }
+    
+    context = {
+        'repairs': repairs,
+        'repairs_by_status': repairs_by_status,
+        'statuses': RepairRequest._meta.get_field('status').choices,
+    }
+    return render(request, "HeadOffice/RequestRepairs.html", context)
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_inventory(request):
+    """Inventory management view."""
+    inventory_sessions = InventorySession.objects.select_related(
+        'branch', 'created_by'
+    ).all().order_by('-start_date')
+    
+    branches = Branch.objects.all()
+    
+    context = {
+        'inventory_sessions': inventory_sessions,
+        'branches': branches,
+    }
+    return render(request, "HeadOffice/Inventory.html", context)
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_audit_logs(request):
+    """Audit logs view."""
+    audit_logs = AuditLog.objects.select_related('user').all().order_by('-timestamp')
+    
+    # Filter by action if provided
+    action = request.GET.get('action')
+    if action:
+        audit_logs = audit_logs.filter(action=action)
+    
+    # Get unique actions for filter dropdown
+    actions = AuditLog.objects.values_list('action', flat=True).distinct()
+    
+    context = {
+        'audit_logs': audit_logs[:500],  # Show last 500
+        'actions': actions,
+        'selected_action': action,
+    }
+    return render(request, "HeadOffice/AuditLogs.html", context)

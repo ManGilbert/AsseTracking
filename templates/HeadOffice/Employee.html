@@ -1,0 +1,387 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Employee Management - Head Office{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="feather-users me-2"></i>Employee Management</h1>
+                    <p class="text-muted mb-0">Manage all employees in the system</p>
+                </div>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createEmployeeModal">
+                    <i class="feather-plus me-1"></i>New Employee
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" id="searchEmployee" placeholder="Search by name...">
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="filterStatus">
+                                <option value="">All Status</option>
+                                {% for status, label in statuses %}
+                                <option value="{{ status }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="filterBranch">
+                                <option value="">All Branches</option>
+                                {% for branch in branches %}
+                                <option value="{{ branch.id }}">{{ branch.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                                <i class="feather-refresh-cw me-1"></i>Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employees Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Employees ({{ employees.count }})</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col">Name</th>
+                                    <th scope="col">Position</th>
+                                    <th scope="col">Branch</th>
+                                    <th scope="col">Department</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Hire Date</th>
+                                    <th scope="col" class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for employee in employees %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar-text bg-soft-primary text-primary">
+                                                {{ employee.full_name|first }}
+                                            </div>
+                                            <div>
+                                                <strong>{{ employee.full_name }}</strong>
+                                                {% if employee.user %}
+                                                <div class="small text-muted">@{{ employee.user.username }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ employee.position }}</td>
+                                    <td>{{ employee.branch.name }}</td>
+                                    <td>{{ employee.department.name|default:"—" }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if employee.status == 'ACTIVE' %}bg-success
+                                            {% elif employee.status == 'INACTIVE' %}bg-warning
+                                            {% elif employee.status == 'EXITED' %}bg-danger
+                                            {% endif %}">
+                                            {{ employee.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>{{ employee.hire_date|date:"M d, Y" }}</td>
+                                    <td class="text-end">
+                                        <div class="hstack gap-1 justify-content-end">
+                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editEmployeeModal" 
+                                                    onclick="loadEmployee({{ employee.id }})">
+                                                <i class="feather-edit"></i>
+                                            </button>
+                                            {% if employee.status != 'EXITED' %}
+                                            <button class="btn btn-sm btn-outline-danger" onclick="markEmployeeExited({{ employee.id }})">
+                                                <i class="feather-log-out"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        No employees found
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Employee Modal -->
+<div class="modal fade" id="createEmployeeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Employee</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createEmployeeForm" method="post" action="/api/employees/" class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="fullName" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Position <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="position" required>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Branch <span class="text-danger">*</span></label>
+                        <select class="form-select" id="branchId" required>
+                            <option value="">Select Branch</option>
+                            {% for branch in branches %}
+                            <option value="{{ branch.id }}">{{ branch.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Department</label>
+                        <select class="form-select" id="departmentId">
+                            <option value="">Select Department</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Hire Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="hireDate" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Link to User (Optional)</label>
+                        <select class="form-select" id="userId">
+                            <option value="">No user</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.username }} ({{ user.role }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Employee</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Employee Modal -->
+<div class="modal fade" id="editEmployeeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Employee</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editEmployeeForm" method="post" class="modal-body">
+                <input type="hidden" id="editEmployeeId">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Full Name</label>
+                        <input type="text" class="form-control" id="editFullName" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Position</label>
+                        <input type="text" class="form-control" id="editPosition" required>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Branch</label>
+                        <select class="form-select" id="editBranchId" required>
+                            {% for branch in branches %}
+                            <option value="{{ branch.id }}">{{ branch.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Department</label>
+                        <select class="form-select" id="editDepartmentId">
+                            <option value="">No department</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="editStatus">
+                            {% for status, label in statuses %}
+                            <option value="{{ status }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Hire Date</label>
+                        <input type="date" class="form-control" id="editHireDate" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Employee</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup branch change listener for departments
+    document.getElementById('branchId').addEventListener('change', function() {
+        loadDepartments(this.value, 'departmentId');
+    });
+    
+    document.getElementById('editBranchId').addEventListener('change', function() {
+        loadDepartments(this.value, 'editDepartmentId');
+    });
+    
+    // Form submission
+    document.getElementById('createEmployeeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        submitEmployeeForm(null);
+    });
+    
+    document.getElementById('editEmployeeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const employeeId = document.getElementById('editEmployeeId').value;
+        submitEmployeeForm(employeeId);
+    });
+});
+
+function loadDepartments(branchId, targetSelectId) {
+    if (!branchId) {
+        document.getElementById(targetSelectId).innerHTML = '<option value="">Select Department</option>';
+        return;
+    }
+    
+    fetch(`/api/departments/?branch=${branchId}`)
+        .then(response => response.json())
+        .then(data => {
+            const select = document.getElementById(targetSelectId);
+            select.innerHTML = '<option value="">No department</option>';
+            data.results.forEach(dept => {
+                select.innerHTML += `<option value="${dept.id}">${dept.name}</option>`;
+            });
+        });
+}
+
+function loadEmployee(employeeId) {
+    fetch(`/api/employees/${employeeId}/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('editEmployeeId').value = data.id;
+            document.getElementById('editFullName').value = data.full_name;
+            document.getElementById('editPosition').value = data.position;
+            document.getElementById('editBranchId').value = data.branch;
+            document.getElementById('editStatus').value = data.status;
+            document.getElementById('editHireDate').value = data.hire_date;
+            
+            // Load departments for the branch
+            loadDepartments(data.branch, 'editDepartmentId');
+            
+            // Set department after loading
+            setTimeout(() => {
+                document.getElementById('editDepartmentId').value = data.department || '';
+            }, 200);
+        });
+}
+
+function submitEmployeeForm(employeeId) {
+    const method = employeeId ? 'PATCH' : 'POST';
+    const url = employeeId ? `/api/employees/${employeeId}/` : '/api/employees/';
+    
+    const data = {
+        full_name: document.getElementById(employeeId ? 'editFullName' : 'fullName').value,
+        position: document.getElementById(employeeId ? 'editPosition' : 'position').value,
+        branch: parseInt(document.getElementById(employeeId ? 'editBranchId' : 'branchId').value),
+        department: parseInt(document.getElementById(employeeId ? 'editDepartmentId' : 'departmentId').value) || null,
+        hire_date: document.getElementById(employeeId ? 'editHireDate' : 'hireDate').value,
+    };
+    
+    if (!employeeId) {
+        data.user = parseInt(document.getElementById('userId').value) || null;
+    } else {
+        data.status = document.getElementById('editStatus').value;
+    }
+    
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Error saving employee');
+        }
+    });
+}
+
+function markEmployeeExited(employeeId) {
+    if (!confirm('Mark this employee as exited? This will initiate device recovery.')) return;
+    
+    const exitDate = new Date().toISOString().split('T')[0];
+    
+    fetch(`/api/employees/${employeeId}/set_exit_status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ exit_date: exitDate })
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.message);
+        location.reload();
+    });
+}
+
+function resetFilters() {
+    document.getElementById('searchEmployee').value = '';
+    document.getElementById('filterStatus').value = '';
+    document.getElementById('filterBranch').value = '';
+}
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+</script>
+{% endblock %}

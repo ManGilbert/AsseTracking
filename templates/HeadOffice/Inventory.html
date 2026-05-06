@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Inventory Management - Head Office{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="feather-inbox me-2"></i>Inventory Management</h1>
+                    <p class="text-muted mb-0">Create and manage inventory sessions</p>
+                </div>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+                    <i class="feather-plus me-1"></i>New Session
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventory Sessions -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Inventory Sessions ({{ inventory_sessions.count }})</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Branch</th>
+                                    <th>Start Date</th>
+                                    <th>End Date</th>
+                                    <th>Created By</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for session in inventory_sessions %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ session.branch.name }}</strong>
+                                    </td>
+                                    <td>{{ session.start_date|date:"M d, Y H:i" }}</td>
+                                    <td>
+                                        {% if session.end_date %}
+                                        {{ session.end_date|date:"M d, Y H:i" }}
+                                        {% else %}
+                                        <span class="badge bg-warning">In Progress</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ session.created_by.username }}</td>
+                                    <td>
+                                        {% if session.approved_by_head_office %}
+                                        <span class="badge bg-success">Approved by HO</span>
+                                        {% elif session.approved_by_branch %}
+                                        <span class="badge bg-info">Approved by Branch</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">Pending</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-primary" onclick="viewSession({{ session.id }})">
+                                            <i class="feather-eye me-1"></i>View
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        No inventory sessions
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Session Modal -->
+<div class="modal fade" id="createSessionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create Inventory Session</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createSessionForm" class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Branch <span class="text-danger">*</span></label>
+                    <select class="form-select" id="sessionBranch" required>
+                        <option value="">Select Branch</option>
+                        {% for branch in branches %}
+                        <option value="{{ branch.id }}">{{ branch.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="alert alert-info">
+                    <i class="feather-info me-2"></i>
+                    <small>A new inventory session will be created for the selected branch. Devices in this branch will need to be verified or marked as missing.</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Session</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function viewSession(sessionId) {
+    fetch(`/api/inventory-sessions/${sessionId}/`)
+        .then(response => response.json())
+        .then(data => {
+            alert(`Session ID: ${data.id}\nBranch: ${data.branch.name}\nStart: ${new Date(data.start_date).toLocaleString()}\nApproved by Branch: ${data.approved_by_branch}\nApproved by Head Office: ${data.approved_by_head_office}`);
+        });
+}
+
+document.getElementById('createSessionForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const branchId = document.getElementById('sessionBranch').value;
+    
+    if (!branchId) {
+        alert('Please select a branch');
+        return;
+    }
+    
+    const data = {
+        branch_id: parseInt(branchId)
+    };
+    
+    fetch('/api/inventory-sessions/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        if (response.ok) {
+            alert('Inventory session created successfully');
+            location.reload();
+        } else {
+            response.json().then(e => alert(JSON.stringify(e)));
+        }
+    });
+});
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+</script>
+{% endblock %}
