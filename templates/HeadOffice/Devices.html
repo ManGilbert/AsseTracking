@@ -41,10 +41,10 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <input type="text" class="form-control" id="searchDevice" placeholder="Search by tag, serial...">
+                            <input type="text" class="form-control" id="searchDevice" data-table-search="#devicesTable" placeholder="Search by tag, serial...">
                         </div>
                         <div class="col-md-3">
-                            <select class="form-select" id="filterStatus">
+                            <select class="form-select" id="filterStatus" data-table-filter="#devicesTable" data-filter-column="4" data-filter-match="value">
                                 <option value="">All Status</option>
                                 {% for status, label in statuses %}
                                 <option value="{{ status }}">{{ label }}</option>
@@ -52,7 +52,7 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <select class="form-select" id="filterBranch">
+                            <select class="form-select" id="filterBranch" data-table-filter="#devicesTable" data-filter-column="6">
                                 <option value="">All Branches</option>
                                 {% for branch in branches %}
                                 <option value="{{ branch.id }}">{{ branch.name }}</option>
@@ -79,7 +79,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0" id="devicesTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Tag</th>
@@ -136,6 +136,9 @@
                                             </button>
                                             <button class="btn btn-sm btn-outline-secondary" onclick="viewDeviceDetails({{ device.id }})">
                                                 <i class="feather-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteDevice({{ device.id }})">
+                                                <i class="feather-trash-2"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -275,6 +278,7 @@ function resetFilters() {
     document.getElementById('searchDevice').value = '';
     document.getElementById('filterStatus').value = '';
     document.getElementById('filterBranch').value = '';
+    window.AsseTrackTableSearch.filterTable(document.getElementById('searchDevice'));
 }
 
 function loadDevice(deviceId) {
@@ -322,7 +326,7 @@ document.getElementById('createDeviceForm').addEventListener('submit', function(
     })
     .then(response => {
         if (response.ok) location.reload();
-        else response.json().then(e => alert(JSON.stringify(e)));
+        else response.json().then(e => alert(getApiError(e, 'Error creating device')));
     });
 });
 
@@ -347,14 +351,34 @@ document.getElementById('editDeviceForm').addEventListener('submit', function(e)
     })
     .then(response => {
         if (response.ok) location.reload();
-        else alert('Error updating device');
+        else response.json().then(e => alert(getApiError(e, 'Error updating device')));
     });
 });
+
+function deleteDevice(deviceId) {
+    if (!confirm('Delete this device and its history?')) return;
+
+    fetch(`/api/devices/${deviceId}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error deleting device')));
+    });
+}
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
 }
 </script>
 {% endblock %}

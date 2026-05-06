@@ -27,10 +27,10 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <input type="text" class="form-control" id="searchEmployee" placeholder="Search by name...">
+                            <input type="text" class="form-control" id="searchEmployee" data-table-search="#employeesTable" placeholder="Search by name...">
                         </div>
                         <div class="col-md-3">
-                            <select class="form-select" id="filterStatus">
+                            <select class="form-select" id="filterStatus" data-table-filter="#employeesTable" data-filter-column="5">
                                 <option value="">All Status</option>
                                 {% for status, label in statuses %}
                                 <option value="{{ status }}">{{ label }}</option>
@@ -38,7 +38,7 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <select class="form-select" id="filterBranch">
+                            <select class="form-select" id="filterBranch" data-table-filter="#employeesTable" data-filter-column="3">
                                 <option value="">All Branches</option>
                                 {% for branch in branches %}
                                 <option value="{{ branch.id }}">{{ branch.name }}</option>
@@ -65,7 +65,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0" id="employeesTable">
                             <thead class="table-light">
                                 <tr>
                                     <th scope="col">Name</th>
@@ -111,6 +111,9 @@
                                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editEmployeeModal" 
                                                     onclick="loadEmployee({{ employee.id }})">
                                                 <i class="feather-edit"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee({{ employee.id }})">
+                                                <i class="feather-trash-2"></i>
                                             </button>
                                             {% if employee.status != 'EXITED' %}
                                             <button class="btn btn-sm btn-outline-danger" onclick="markEmployeeExited({{ employee.id }})">
@@ -178,9 +181,9 @@
                         <input type="date" class="form-control" id="hireDate" required>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Link to User (Optional)</label>
+                        <label class="form-label">Link Existing User (Optional)</label>
                         <select class="form-select" id="userId">
-                            <option value="">No user</option>
+                            <option value="">Auto-generate login</option>
                             {% for user in users %}
                             <option value="{{ user.id }}">{{ user.username }} ({{ user.role }})</option>
                             {% endfor %}
@@ -330,7 +333,10 @@ function submitEmployeeForm(employeeId) {
     };
     
     if (!employeeId) {
-        data.user = parseInt(document.getElementById('userId').value) || null;
+        const userId = parseInt(document.getElementById('userId').value) || null;
+        if (userId) {
+            data.user = userId;
+        }
     } else {
         data.status = document.getElementById('editStatus').value;
     }
@@ -345,9 +351,14 @@ function submitEmployeeForm(employeeId) {
     })
     .then(response => {
         if (response.ok) {
-            location.reload();
+            return response.json().then(data => {
+                if (!employeeId && data.generated_username) {
+                    alert(`Employee created successfully.\n\nUsername: ${data.generated_username}\nEmail: ${data.generated_email}\nDefault Password: ${data.default_password}`);
+                }
+                location.reload();
+            });
         } else {
-            alert('Error saving employee');
+            response.json().then(e => alert(getApiError(e, 'Error saving employee')));
         }
     });
 }
@@ -372,16 +383,37 @@ function markEmployeeExited(employeeId) {
     });
 }
 
+function deleteEmployee(employeeId) {
+    if (!confirm('Delete this employee and their login account?')) return;
+
+    fetch(`/api/employees/${employeeId}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error deleting employee')));
+    });
+}
+
 function resetFilters() {
     document.getElementById('searchEmployee').value = '';
     document.getElementById('filterStatus').value = '';
     document.getElementById('filterBranch').value = '';
+    window.AsseTrackTableSearch.filterTable(document.getElementById('searchEmployee'));
 }
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
 }
 </script>
 {% endblock %}

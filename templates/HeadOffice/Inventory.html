@@ -25,11 +25,17 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Inventory Sessions ({{ inventory_sessions.count }})</h5>
+                    <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+                        <h5 class="card-title mb-0">Inventory Sessions ({{ inventory_sessions.count }})</h5>
+                        <div class="input-group w-100 w-md-auto" style="max-width: 340px;">
+                            <span class="input-group-text"><i class="feather-search"></i></span>
+                            <input type="search" class="form-control" id="searchInventorySessions" data-table-search="#inventorySessionsTable" placeholder="Search inventory sessions...">
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0" id="inventorySessionsTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Branch</th>
@@ -67,6 +73,19 @@
                                     <td class="text-end">
                                         <button class="btn btn-sm btn-outline-primary" onclick="viewSession({{ session.id }})">
                                             <i class="feather-eye me-1"></i>View
+                                        </button>
+                                        {% if not session.approved_by_head_office %}
+                                        <button class="btn btn-sm btn-outline-success" onclick="approveInventorySession({{ session.id }})">
+                                            <i class="feather-check me-1"></i>Approve
+                                        </button>
+                                        {% endif %}
+                                        {% if not session.end_date %}
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="closeInventorySession({{ session.id }})">
+                                            <i class="feather-lock me-1"></i>Close
+                                        </button>
+                                        {% endif %}
+                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteInventorySession({{ session.id }})">
+                                            <i class="feather-trash-2"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -122,8 +141,47 @@ function viewSession(sessionId) {
     fetch(`/api/inventory-sessions/${sessionId}/`)
         .then(response => response.json())
         .then(data => {
-            alert(`Session ID: ${data.id}\nBranch: ${data.branch.name}\nStart: ${new Date(data.start_date).toLocaleString()}\nApproved by Branch: ${data.approved_by_branch}\nApproved by Head Office: ${data.approved_by_head_office}`);
+            alert(`Session ID: ${data.id}\nBranch: ${data.branch_name}\nStart: ${new Date(data.start_date).toLocaleString()}\nApproved by Branch: ${data.approved_by_branch}\nApproved by Head Office: ${data.approved_by_head_office}`);
         });
+}
+
+function approveInventorySession(sessionId) {
+    if (!confirm('Approve this inventory session for Head Office?')) return;
+
+    fetch(`/api/inventory-sessions/${sessionId}/approve_head_office/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error approving inventory session')));
+    });
+}
+
+function closeInventorySession(sessionId) {
+    if (!confirm('Close this inventory session?')) return;
+
+    fetch(`/api/inventory-sessions/${sessionId}/close/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error closing inventory session')));
+    });
+}
+
+function deleteInventorySession(sessionId) {
+    if (!confirm('Delete this inventory session?')) return;
+
+    fetch(`/api/inventory-sessions/${sessionId}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error deleting inventory session')));
+    });
 }
 
 document.getElementById('createSessionForm').addEventListener('submit', function(e) {
@@ -152,7 +210,7 @@ document.getElementById('createSessionForm').addEventListener('submit', function
             alert('Inventory session created successfully');
             location.reload();
         } else {
-            response.json().then(e => alert(JSON.stringify(e)));
+            response.json().then(e => alert(getApiError(e, 'Error creating inventory session')));
         }
     });
 });
@@ -161,6 +219,13 @@ function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
 }
 </script>
 {% endblock %}

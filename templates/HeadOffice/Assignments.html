@@ -49,18 +49,24 @@
     </div>
 
     <!-- Active Assignments Tab -->
-    <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button">
-                Active Assignments ({{ active_assignments|length }})
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="returned-tab" data-bs-toggle="tab" data-bs-target="#returned" type="button">
-                Returned ({{ returned_assignments|length }})
-            </button>
-        </li>
-    </ul>
+    <div class="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center mb-3">
+        <ul class="nav nav-tabs mb-0" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button">
+                    Active Assignments ({{ active_assignments|length }})
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="returned-tab" data-bs-toggle="tab" data-bs-target="#returned" type="button">
+                    Returned ({{ returned_assignments|length }})
+                </button>
+            </li>
+        </ul>
+        <div class="input-group w-100 w-lg-auto" style="max-width: 340px;">
+            <span class="input-group-text"><i class="feather-search"></i></span>
+            <input type="search" class="form-control" id="searchAssignments" data-table-search="#activeAssignmentsTable" placeholder="Search assignments...">
+        </div>
+    </div>
 
     <!-- Tab Content -->
     <div class="tab-content">
@@ -69,7 +75,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0" id="activeAssignmentsTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Device Tag</th>
@@ -99,6 +105,9 @@
                                                 onclick="loadAssignment({{ assignment.id }})">
                                             <i class="feather-check me-1"></i>Return
                                         </button>
+                                        <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteAssignment({{ assignment.id }})">
+                                            <i class="feather-trash-2"></i>
+                                        </button>
                                     </td>
                                 </tr>
                                 {% empty %}
@@ -120,7 +129,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0" id="returnedAssignmentsTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Device Tag</th>
@@ -129,6 +138,7 @@
                                     <th>Returned Date</th>
                                     <th>Received By</th>
                                     <th>Duration</th>
+                                    <th class="text-end">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -146,10 +156,15 @@
                                         {{ assignment.returned_date|timeuntil:assignment.assigned_date }}
                                         {% endif %}
                                     </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteAssignment({{ assignment.id }})">
+                                            <i class="feather-trash-2"></i>
+                                        </button>
+                                    </td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">
+                                    <td colspan="7" class="text-center text-muted py-4">
                                         No returned assignments
                                     </td>
                                 </tr>
@@ -230,6 +245,20 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     loadAvailableDevices();
+    const searchAssignments = document.getElementById('searchAssignments');
+    const activeTab = document.getElementById('active-tab');
+    const returnedTab = document.getElementById('returned-tab');
+
+    if (searchAssignments && activeTab && returnedTab) {
+        activeTab.addEventListener('shown.bs.tab', function() {
+            searchAssignments.dataset.tableSearch = '#activeAssignmentsTable';
+            window.AsseTrackTableSearch.filterTable(searchAssignments);
+        });
+        returnedTab.addEventListener('shown.bs.tab', function() {
+            searchAssignments.dataset.tableSearch = '#returnedAssignmentsTable';
+            window.AsseTrackTableSearch.filterTable(searchAssignments);
+        });
+    }
     
     document.getElementById('assignDeviceForm').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -249,7 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => {
             if (response.ok) location.reload();
-            else response.json().then(e => alert(JSON.stringify(e)));
+            else response.json().then(e => alert(getApiError(e, 'Error assigning device')));
         });
     });
     
@@ -270,7 +299,7 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => {
             if (response.ok) location.reload();
-            else alert('Error returning device');
+            else response.json().then(e => alert(getApiError(e, 'Error returning device')));
         });
     });
 });
@@ -294,15 +323,35 @@ function loadAssignment(assignmentId) {
         .then(response => response.json())
         .then(data => {
             document.getElementById('assignmentId').value = data.id;
-            document.getElementById('deviceTagDisplay').textContent = data.device.company_tag;
-            document.getElementById('employeeNameDisplay').textContent = data.employee.full_name;
+            document.getElementById('deviceTagDisplay').textContent = data.device_info ? data.device_info.company_tag : data.device;
+            document.getElementById('employeeNameDisplay').textContent = data.employee_name || data.employee;
         });
+}
+
+function deleteAssignment(assignmentId) {
+    if (!confirm('Delete this assignment record? Active assignment devices will be returned to available.')) return;
+
+    fetch(`/api/assignments/${assignmentId}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error deleting assignment')));
+    });
 }
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
 }
 </script>
 {% endblock %}

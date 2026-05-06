@@ -110,6 +110,11 @@ class UserViewSet(viewsets.ModelViewSet):
         """Set user as inactive by default."""
         serializer.save(is_active=True)
 
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+
 
 # =========================
 # BRANCH VIEWSET
@@ -136,6 +141,38 @@ class BranchViewSet(viewsets.ModelViewSet):
         if self.action in ["create", "update", "partial_update", "destroy"]:
             return [IsHeadOffice()]
         return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        branch = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "BRANCH_CREATED",
+            "Branch",
+            branch.id,
+            f"Branch: {branch.name}",
+        )
+
+    def perform_update(self, serializer):
+        branch = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "BRANCH_UPDATED",
+            "Branch",
+            branch.id,
+            f"Branch: {branch.name}",
+        )
+
+    def perform_destroy(self, instance):
+        branch_id = instance.id
+        branch_name = instance.name
+        instance.delete()
+        AuditService.log_action(
+            self.request.user,
+            "BRANCH_DELETED",
+            "Branch",
+            branch_id,
+            f"Branch: {branch_name}",
+        )
 
 
 # =========================
@@ -165,6 +202,28 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         if self.action in ["create", "update", "partial_update", "destroy"]:
             return [IsHeadOffice()]
         return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        department = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "DEPARTMENT_CREATED",
+            "Department",
+            department.id,
+            f"Department: {department.name}",
+        )
+
+    def perform_destroy(self, instance):
+        department_id = instance.id
+        department_name = instance.name
+        instance.delete()
+        AuditService.log_action(
+            self.request.user,
+            "DEPARTMENT_DELETED",
+            "Department",
+            department_id,
+            f"Department: {department_name}",
+        )
 
 
 # =========================
@@ -206,6 +265,47 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         ]:
             return [IsHeadOffice()]
         return [IsAuthenticated()]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.action == "create":
+            context["include_default_password"] = True
+        return context
+
+    def perform_create(self, serializer):
+        employee = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "EMPLOYEE_CREATED",
+            "Employee",
+            employee.id,
+            f"Employee: {employee.full_name}; username: {employee.user.username if employee.user else 'none'}",
+        )
+
+    def perform_update(self, serializer):
+        employee = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "EMPLOYEE_UPDATED",
+            "Employee",
+            employee.id,
+            f"Employee: {employee.full_name}",
+        )
+
+    def perform_destroy(self, instance):
+        employee_id = instance.id
+        employee_name = instance.full_name
+        user = instance.user
+        instance.delete()
+        if user:
+            user.delete()
+        AuditService.log_action(
+            self.request.user,
+            "EMPLOYEE_DELETED",
+            "Employee",
+            employee_id,
+            f"Employee: {employee_name}",
+        )
 
     @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
     def set_exit_status(self, request, pk=None):
@@ -295,6 +395,28 @@ class DeviceViewSet(viewsets.ModelViewSet):
             f"Device: {device.company_tag}",
         )
 
+    def perform_update(self, serializer):
+        device = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "DEVICE_UPDATED",
+            "Device",
+            device.id,
+            f"Device: {device.company_tag}",
+        )
+
+    def perform_destroy(self, instance):
+        device_id = instance.id
+        device_tag = instance.company_tag
+        instance.delete()
+        AuditService.log_action(
+            self.request.user,
+            "DEVICE_DELETED",
+            "Device",
+            device_id,
+            f"Device: {device_tag}",
+        )
+
 
 # =========================
 # DEVICE ASSIGNMENT VIEWSET
@@ -378,6 +500,36 @@ class DeviceAssignmentViewSet(viewsets.ModelViewSet):
                 {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
 
+    def perform_update(self, serializer):
+        assignment = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "ASSIGNMENT_UPDATED",
+            "DeviceAssignment",
+            assignment.id,
+            f"Assignment for {assignment.device.company_tag}",
+        )
+
+    def perform_destroy(self, instance):
+        assignment_id = instance.id
+        device = instance.device
+        was_active = instance.returned_date is None
+        instance.delete()
+        if was_active:
+            device.status = "AVAILABLE"
+            device.assigned_employee = None
+            device.assigned_branch = None
+            device.location_type = "HEAD_OFFICE"
+            device.current_location = "Head Office"
+            device.save()
+        AuditService.log_action(
+            self.request.user,
+            "ASSIGNMENT_DELETED",
+            "DeviceAssignment",
+            assignment_id,
+            f"Assignment for {device.company_tag}",
+        )
+
 
 # =========================
 # REPAIR REQUEST VIEWSET
@@ -410,8 +562,10 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "create":
-            return [IsEmployee()]
+            return [IsAuthenticated()]
         elif self.action in ["approve", "reject"]:
+            return [IsHeadOffice()]
+        elif self.action in ["update", "partial_update", "destroy"]:
             return [IsHeadOffice()]
         return [IsAuthenticated()]
 
@@ -429,14 +583,20 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Get employee for current user
-        try:
-            employee = Employee.objects.get(user=request.user)
-        except Employee.DoesNotExist:
-            return Response(
-                {"error": "Employee profile not found"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        employee_id = request.data.get("employee_id")
+        if request.user.role == "HEAD_OFFICE" and employee_id:
+            try:
+                employee = Employee.objects.get(id=employee_id)
+            except Employee.DoesNotExist:
+                return Response({"error": "Employee profile not found"}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            try:
+                employee = Employee.objects.get(user=request.user)
+            except Employee.DoesNotExist:
+                return Response(
+                    {"error": "Employee profile not found"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             repair_request = RepairService.create_repair_request(
@@ -455,6 +615,28 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
+
+    def perform_update(self, serializer):
+        repair_request = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "REPAIR_REQUEST_UPDATED",
+            "RepairRequest",
+            repair_request.id,
+            f"Repair request for {repair_request.device.company_tag}",
+        )
+
+    def perform_destroy(self, instance):
+        repair_id = instance.id
+        device_tag = instance.device.company_tag
+        instance.delete()
+        AuditService.log_action(
+            self.request.user,
+            "REPAIR_REQUEST_DELETED",
+            "RepairRequest",
+            repair_id,
+            f"Repair request for {device_tag}",
+        )
 
     @action(
         detail=True, methods=["post"], permission_classes=[IsHeadOffice]
@@ -599,6 +781,8 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             "update",
             "partial_update",
             "destroy",
+            "approve_head_office",
+            "close",
         ]:
             return [CanCreateInventorySession()]
         return [IsAuthenticated()]
@@ -627,6 +811,60 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
+
+    def perform_update(self, serializer):
+        session = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "INVENTORY_SESSION_UPDATED",
+            "InventorySession",
+            session.id,
+            f"Session for {session.branch.name}",
+        )
+
+    def perform_destroy(self, instance):
+        session_id = instance.id
+        branch_name = instance.branch.name
+        instance.delete()
+        AuditService.log_action(
+            self.request.user,
+            "INVENTORY_SESSION_DELETED",
+            "InventorySession",
+            session_id,
+            f"Session for {branch_name}",
+        )
+
+    @action(detail=True, methods=["post"], permission_classes=[CanCreateInventorySession])
+    def approve_head_office(self, request, pk=None):
+        session = self.get_object()
+        session.approved_by_head_office = True
+        if not session.end_date:
+            from django.utils import timezone
+            session.end_date = timezone.now()
+        session.save()
+        AuditService.log_action(
+            request.user,
+            "INVENTORY_APPROVED_HEAD_OFFICE",
+            "InventorySession",
+            session.id,
+            f"Session for {session.branch.name}",
+        )
+        return Response(self.get_serializer(session).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], permission_classes=[CanCreateInventorySession])
+    def close(self, request, pk=None):
+        from django.utils import timezone
+        session = self.get_object()
+        session.end_date = timezone.now()
+        session.save()
+        AuditService.log_action(
+            request.user,
+            "INVENTORY_SESSION_CLOSED",
+            "InventorySession",
+            session.id,
+            f"Session for {session.branch.name}",
+        )
+        return Response(self.get_serializer(session).data, status=status.HTTP_200_OK)
 
 
 # =========================
@@ -1025,6 +1263,8 @@ def head_office_repairs(request):
         'repairs': repairs,
         'repairs_by_status': repairs_by_status,
         'statuses': RepairRequest._meta.get_field('status').choices,
+        'devices': Device.objects.select_related('assigned_employee').exclude(assigned_employee__isnull=True),
+        'employees': Employee.objects.filter(status='ACTIVE'),
     }
     return render(request, "HeadOffice/RequestRepairs.html", context)
 

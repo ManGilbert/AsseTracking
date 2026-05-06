@@ -25,11 +25,17 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Branches ({{ branches.count }})</h5>
+                    <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+                        <h5 class="card-title mb-0">Branches ({{ branches.count }})</h5>
+                        <div class="input-group w-100 w-md-auto" style="max-width: 320px;">
+                            <span class="input-group-text"><i class="feather-search"></i></span>
+                            <input type="search" class="form-control" id="searchBranches" data-table-search="#branchesTable" placeholder="Search branches...">
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover mb-0" id="branchesTable">
                             <thead class="table-light">
                                 <tr>
                                     <th scope="col">Branch Name</th>
@@ -42,7 +48,7 @@
                             </thead>
                             <tbody>
                                 {% for branch in branches %}
-                                <tr>
+                                <tr data-search-row-id="{{ branch.id }}">
                                     <td>
                                         <strong>{{ branch.name }}</strong>
                                     </td>
@@ -69,10 +75,13 @@
                                             <button class="btn btn-sm btn-outline-secondary" onclick="expandBranchDetails({{ branch.id }})">
                                                 <i class="feather-chevron-down"></i>
                                             </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteBranch({{ branch.id }})">
+                                                <i class="feather-trash-2"></i>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
-                                <tr id="branch-details-{{ branch.id }}" style="display:none;">
+                                <tr id="branch-details-{{ branch.id }}" data-search-detail-for="{{ branch.id }}" style="display:none;">
                                     <td colspan="6">
                                         <div class="p-3">
                                             <div class="row">
@@ -212,7 +221,10 @@
 <script>
 function expandBranchDetails(branchId) {
     const element = document.getElementById(`branch-details-${branchId}`);
-    element.style.display = element.style.display === 'none' ? 'table-row' : 'none';
+    const isExpanded = element.style.display === 'none' || element.hidden;
+    element.dataset.expanded = isExpanded ? 'true' : 'false';
+    element.hidden = !isExpanded;
+    element.style.display = isExpanded ? 'table-row' : 'none';
 }
 
 function setCurrentBranch(branchId) {
@@ -246,7 +258,7 @@ document.getElementById('createBranchForm').addEventListener('submit', function(
     })
     .then(response => {
         if (response.ok) location.reload();
-        else alert('Error creating branch');
+        else response.json().then(e => alert(getApiError(e, 'Error creating branch')));
     });
 });
 
@@ -268,7 +280,7 @@ document.getElementById('editBranchForm').addEventListener('submit', function(e)
     })
     .then(response => {
         if (response.ok) location.reload();
-        else alert('Error updating branch');
+        else response.json().then(e => alert(getApiError(e, 'Error updating branch')));
     });
 });
 
@@ -289,9 +301,22 @@ document.getElementById('createDepartmentForm').addEventListener('submit', funct
     })
     .then(response => {
         if (response.ok) location.reload();
-        else alert('Error creating department');
+        else response.json().then(e => alert(getApiError(e, 'Error creating department')));
     });
 });
+
+function deleteBranch(branchId) {
+    if (!confirm('Delete this branch? Departments will be removed and linked employees/devices will be unassigned.')) return;
+
+    fetch(`/api/branches/${branchId}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error deleting branch')));
+    });
+}
 
 function deleteDepartment(departmentId) {
     if (!confirm('Delete this department?')) return;
@@ -302,7 +327,7 @@ function deleteDepartment(departmentId) {
     })
     .then(response => {
         if (response.ok) location.reload();
-        else alert('Error deleting department');
+        else response.json().then(e => alert(getApiError(e, 'Error deleting department')));
     });
 }
 
@@ -310,6 +335,13 @@ function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
 }
 </script>
 {% endblock %}

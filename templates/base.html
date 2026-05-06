@@ -56,13 +56,13 @@
                                     <span class="nxl-mtext">Head Office</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
                                 </a>
                                 <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Employee</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Branches</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Devices</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Assignments</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Repairs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Inventory</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Audit Logs</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_employees' %}">Employee</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_branches' %}">Branches</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_devices' %}">Devices</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_assignments' %}">Assignments</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_repairs' %}">Repairs</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_inventory' %}">Inventory</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_audit_logs' %}">Audit Logs</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="#">Reports</a></li>
                                 </ul>
                             </li>
@@ -74,7 +74,7 @@
                                     <span class="nxl-mtext">Branch Manager</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
                                 </a>
                                 <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Inventory</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="">Inventory</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="#">Assignments</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="#">Reports</a></li>
                                 </ul>
@@ -515,6 +515,7 @@
     <script src="{% static 'assets/js/common-init.min.js' %}"></script>
     <script src="{% static 'assets/js/dashboard-init.min.js' %}"></script>
     <script src="{% static 'assets/js/theme-customizer-init.min.js' %}"></script>
+    <script src="{% static 'assets/js/assetrack/table-search.js' %}"></script>
     <script type="module" src="{% static 'assets/js/assetrack/layout-session.js' %}"></script>
     {% block extra_js %}{% endblock %}
 </body>

@@ -5,6 +5,8 @@ Handles data validation and transformation for API requests/responses.
 """
 
 from rest_framework import serializers
+from django.db import transaction
+from django.utils.text import slugify
 from django.utils import timezone
 from .models import (
     User,
@@ -20,6 +22,8 @@ from .models import (
     Notification,
     AuditLog,
 )
+
+DEFAULT_EMPLOYEE_PASSWORD = "Aa@2026123"
 
 
 # =========================
@@ -101,6 +105,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(
         source="department.name", read_only=True
     )
+    login_username = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    login_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
+    generated_username = serializers.CharField(source="user.username", read_only=True)
+    generated_email = serializers.EmailField(source="user.email", read_only=True)
+    default_password = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -117,8 +126,71 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "status",
             "hire_date",
             "exit_date",
+            "login_username",
+            "login_email",
+            "generated_username",
+            "generated_email",
+            "default_password",
         )
-        read_only_fields = ("id",)
+        read_only_fields = ("id", "generated_username", "generated_email", "default_password")
+
+    def get_default_password(self, obj):
+        if self.context.get("include_default_password") and getattr(obj, "_generated_default_password", False):
+            return DEFAULT_EMPLOYEE_PASSWORD
+        return None
+
+    def _generate_unique_username(self, full_name):
+        base = slugify(full_name).replace("-", ".") or "employee"
+        username = base[:140]
+        counter = 1
+
+        while User.objects.filter(username=username).exists():
+            suffix = f".{counter}"
+            username = f"{base[:150 - len(suffix)]}{suffix}"
+            counter += 1
+
+        return username
+
+    def _generate_unique_email(self, username):
+        base = username.replace(".", "_")
+        email = f"{base}@assetracking.local"
+        counter = 1
+
+        while User.objects.filter(email=email).exists():
+            email = f"{base}{counter}@assetracking.local"
+            counter += 1
+
+        return email
+
+    @transaction.atomic
+    def create(self, validated_data):
+        login_username = validated_data.pop("login_username", "").strip()
+        login_email = validated_data.pop("login_email", "").strip()
+        user = validated_data.get("user")
+        created_user = False
+
+        if not user:
+            username = login_username or self._generate_unique_username(validated_data["full_name"])
+            email = login_email or self._generate_unique_email(username)
+
+            if User.objects.filter(username=username).exists():
+                raise serializers.ValidationError({"login_username": "Username already exists."})
+            if User.objects.filter(email=email).exists():
+                raise serializers.ValidationError({"login_email": "Email already exists."})
+
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=DEFAULT_EMPLOYEE_PASSWORD,
+                role="EMPLOYEE",
+            )
+            validated_data["user"] = user
+            created_user = True
+
+        employee = super().create(validated_data)
+        if created_user:
+            employee._generated_default_password = True
+        return employee
 
 
 class EmployeeListSerializer(serializers.ModelSerializer):
