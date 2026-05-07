@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
 
 # =========================
@@ -165,6 +166,20 @@ class Device(models.Model):
 
     def __str__(self):
         return f"{self.device_type} - {self.company_tag}"
+
+    def has_activity_history(self):
+        return (
+            self.assignments.exists()
+            or RepairRequest.objects.filter(device=self).exists()
+            or InventoryItem.objects.filter(device=self).exists()
+        )
+
+    def delete(self, *args, **kwargs):
+        if self.pk and self.has_activity_history():
+            raise ValidationError(
+                "Device cannot be deleted because it has related activity/history."
+            )
+        return super().delete(*args, **kwargs)
 
 
 # =========================

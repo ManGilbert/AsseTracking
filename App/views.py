@@ -10,7 +10,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Q
+from django.db.models import Count, Q
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -416,6 +417,24 @@ class DeviceViewSet(viewsets.ModelViewSet):
             device_id,
             f"Device: {device_tag}",
         )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.has_activity_history():
+            return Response(
+                {
+                    "error": (
+                        "Device cannot be deleted because it has related "
+                        "activity/history."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except DjangoValidationError as exc:
+            return Response({"error": "; ".join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 # =========================
@@ -1175,7 +1194,9 @@ def technician_dashboard(request):
 @role_required("HEAD_OFFICE")
 def head_office_employees(request):
     """Employee management view."""
-    employees = Employee.objects.select_related('user', 'branch', 'department').all()
+    employees = Employee.objects.select_related(
+        'user', 'branch', 'department'
+    ).prefetch_related('device_set').all()
     branches = Branch.objects.all()
     departments = Department.objects.all()
     users = User.objects.filter(role__in=['EMPLOYEE', 'BRANCH_MANAGER', 'TECHNICIAN'])
@@ -1194,7 +1215,12 @@ def head_office_employees(request):
 @role_required("HEAD_OFFICE")
 def head_office_branches(request):
     """Branch and department management view."""
-    branches = Branch.objects.prefetch_related('departments', 'employees').all()
+    branches = Branch.objects.prefetch_related(
+        'departments',
+        'employees',
+        'employees__device_set',
+        'employees__department',
+    ).all()
     context = {
         'branches': branches,
     }
@@ -1207,14 +1233,24 @@ def head_office_devices(request):
     """Device management view."""
     devices = Device.objects.select_related('assigned_employee', 'assigned_branch').all()
     branches = Branch.objects.all()
+    employees = Employee.objects.select_related('branch').filter(status='ACTIVE')
     statuses = Device._meta.get_field('status').choices
+    location_types = Device._meta.get_field('location_type').choices
     device_types = Device.objects.values_list('device_type', flat=True).distinct()
+    device_type_counts = (
+        Device.objects.values('device_type')
+        .annotate(count=Count('id'))
+        .order_by('device_type')
+    )
     
     context = {
         'devices': devices,
         'branches': branches,
+        'employees': employees,
         'statuses': statuses,
+        'location_types': location_types,
         'device_types': device_types,
+        'device_type_counts': device_type_counts,
     }
     return render(request, "HeadOffice/Devices.html", context)
 
@@ -1231,6 +1267,7 @@ def head_office_assignments(request):
     returned_assignments = assignments.filter(returned_date__isnull=False)
     
     employees = Employee.objects.filter(status='ACTIVE')
+    available_devices = Device.objects.select_related('assigned_branch').filter(status='AVAILABLE')
     branches = Branch.objects.all()
     
     context = {
@@ -1238,6 +1275,7 @@ def head_office_assignments(request):
         'active_assignments': active_assignments,
         'returned_assignments': returned_assignments,
         'employees': employees,
+        'available_devices': available_devices,
         'branches': branches,
     }
     return render(request, "HeadOffice/Assignments.html", context)

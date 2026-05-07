@@ -112,6 +112,14 @@
                                                             <div class="small">
                                                                 <strong>{{ emp.full_name }}</strong>
                                                                 <div class="text-muted">{{ emp.position }}</div>
+                                                                {% for device in emp.device_set.all %}
+                                                                <div class="text-muted">
+                                                                    {{ device.brand }} {{ device.model }} |
+                                                                    Tag: {{ device.company_tag }} |
+                                                                    Serial: {{ device.serial_number }} |
+                                                                    Dept: {{ emp.department.name|default:"-" }}
+                                                                </div>
+                                                                {% endfor %}
                                                             </div>
                                                         </div>
                                                         {% endfor %}

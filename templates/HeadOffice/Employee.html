@@ -30,7 +30,7 @@
                             <input type="text" class="form-control" id="searchEmployee" data-table-search="#employeesTable" placeholder="Search by name...">
                         </div>
                         <div class="col-md-3">
-                            <select class="form-select" id="filterStatus" data-table-filter="#employeesTable" data-filter-column="5">
+                            <select class="form-select" id="filterStatus" data-table-filter="#employeesTable" data-filter-column="6">
                                 <option value="">All Status</option>
                                 {% for status, label in statuses %}
                                 <option value="{{ status }}">{{ label }}</option>
@@ -72,6 +72,7 @@
                                     <th scope="col">Position</th>
                                     <th scope="col">Branch</th>
                                     <th scope="col">Department</th>
+                                    <th scope="col">Assigned Devices</th>
                                     <th scope="col">Status</th>
                                     <th scope="col">Hire Date</th>
                                     <th scope="col" class="text-end">Actions</th>
@@ -96,6 +97,20 @@
                                     <td>{{ employee.position }}</td>
                                     <td>{{ employee.branch.name }}</td>
                                     <td>{{ employee.department.name|default:"—" }}</td>
+                                    <td>
+                                        {% for device in employee.device_set.all %}
+                                        <div class="small mb-1">
+                                            <strong>{{ device.brand }} {{ device.model }}</strong>
+                                            <div class="text-muted">
+                                                Tag: {{ device.company_tag }} |
+                                                Serial: {{ device.serial_number }} |
+                                                Dept: {{ employee.department.name|default:"-" }}
+                                            </div>
+                                        </div>
+                                        {% empty %}
+                                        <span class="text-muted">-</span>
+                                        {% endfor %}
+                                    </td>
                                     <td>
                                         <span class="badge 
                                             {% if employee.status == 'ACTIVE' %}bg-success
@@ -125,7 +140,7 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">
+                                    <td colspan="8" class="text-center text-muted py-4">
                                         No employees found
                                     </td>
                                 </tr>
@@ -181,13 +196,21 @@
                         <input type="date" class="form-control" id="hireDate" required>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Link Existing User (Optional)</label>
-                        <select class="form-select" id="userId">
-                            <option value="">Auto-generate login</option>
-                            {% for user in users %}
-                            <option value="{{ user.id }}">{{ user.username }} ({{ user.role }})</option>
-                            {% endfor %}
+                        <label class="form-label">Role <span class="text-danger">*</span></label>
+                        <select class="form-select" id="loginRole" required>
+                            <option value="EMPLOYEE">Employee</option>
+                            <option value="BRANCH_MANAGER">Branch Manager</option>
                         </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Username <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="loginUsername" required autocomplete="off">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="loginEmail" required autocomplete="off">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -333,10 +356,9 @@ function submitEmployeeForm(employeeId) {
     };
     
     if (!employeeId) {
-        const userId = parseInt(document.getElementById('userId').value) || null;
-        if (userId) {
-            data.user = userId;
-        }
+        data.login_username = document.getElementById('loginUsername').value.trim();
+        data.login_email = document.getElementById('loginEmail').value.trim();
+        data.login_role = document.getElementById('loginRole').value;
     } else {
         data.status = document.getElementById('editStatus').value;
     }

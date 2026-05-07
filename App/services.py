@@ -68,6 +68,14 @@ class DeviceAssignmentService:
         if device.status == "RETIRED":
             raise ValueError("Cannot assign retired device")
 
+        if employee.status != "ACTIVE":
+            raise ValueError("Device can only be assigned to an active employee")
+
+        if device.assigned_branch and device.assigned_branch_id != employee.branch_id:
+            raise ValueError(
+                f"Device is assigned to {device.assigned_branch.name} branch and can only be assigned to employees from that branch"
+            )
+
         # Ensure no active assignment
         active_assignment = DeviceAssignment.objects.filter(
             device=device, returned_date__isnull=True

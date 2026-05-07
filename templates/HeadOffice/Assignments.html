@@ -191,6 +191,11 @@
                     <label class="form-label">Device <span class="text-danger">*</span></label>
                     <select class="form-select" id="deviceId" required>
                         <option value="">Select Device</option>
+                        {% for device in available_devices %}
+                        <option value="{{ device.id }}" data-branch="{{ device.assigned_branch_id|default:'' }}">
+                            {{ device.company_tag }} - {{ device.device_type }}{% if device.assigned_branch %} - {{ device.assigned_branch.name }}{% endif %}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="mb-3">
@@ -198,7 +203,7 @@
                     <select class="form-select" id="employeeId" required>
                         <option value="">Select Employee</option>
                         {% for employee in employees %}
-                        <option value="{{ employee.id }}">{{ employee.full_name }} - {{ employee.branch.name }}</option>
+                        <option value="{{ employee.id }}" data-branch="{{ employee.branch_id|default:'' }}">{{ employee.full_name }} - {{ employee.branch.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -244,7 +249,8 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    loadAvailableDevices();
+    filterEmployeesForDevice();
+    document.getElementById('deviceId').addEventListener('change', filterEmployeesForDevice);
     const searchAssignments = document.getElementById('searchAssignments');
     const activeTab = document.getElementById('active-tab');
     const returnedTab = document.getElementById('returned-tab');
@@ -312,10 +318,31 @@ function loadAvailableDevices() {
             select.innerHTML = '<option value="">Select Device</option>';
             if (data.results) {
                 data.results.forEach(device => {
-                    select.innerHTML += `<option value="${device.id}">${device.company_tag} - ${device.device_type}</option>`;
+                    select.innerHTML += `<option value="${device.id}" data-branch="${device.assigned_branch || ''}">${device.company_tag} - ${device.device_type}</option>`;
                 });
             }
+            filterEmployeesForDevice();
         });
+}
+
+function filterEmployeesForDevice() {
+    const deviceSelect = document.getElementById('deviceId');
+    const employeeSelect = document.getElementById('employeeId');
+    const selectedDevice = deviceSelect.options[deviceSelect.selectedIndex];
+    const branchId = selectedDevice ? selectedDevice.dataset.branch : '';
+
+    Array.from(employeeSelect.options).forEach(option => {
+        if (!option.value) {
+            option.hidden = false;
+            return;
+        }
+        option.hidden = branchId && option.dataset.branch !== branchId;
+    });
+
+    const selectedEmployee = employeeSelect.options[employeeSelect.selectedIndex];
+    if (selectedEmployee && selectedEmployee.hidden) {
+        employeeSelect.value = '';
+    }
 }
 
 function loadAssignment(assignmentId) {

@@ -22,12 +22,12 @@
 
     <!-- Statistics Cards -->
     <div class="row mb-4">
-        {% for device_type in device_types %}
+        {% for item in device_type_counts %}
         <div class="col-md-6 col-lg-3 mb-2">
             <div class="card">
                 <div class="card-body">
-                    <h6 class="text-muted">{{ device_type|upper }}</h6>
-                    <h2 class="mb-0">{{ devices|length }}</h2>
+                    <h6 class="text-muted">{{ item.device_type|upper }}</h6>
+                    <h2 class="mb-0">{{ item.count }}</h2>
                 </div>
             </div>
         </div>
@@ -134,7 +134,8 @@
                                                     onclick="loadDevice({{ device.id }})">
                                                 <i class="feather-edit"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-secondary" onclick="viewDeviceDetails({{ device.id }})">
+                                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#viewDeviceModal"
+                                                    onclick="viewDeviceDetails({{ device.id }})">
                                                 <i class="feather-eye"></i>
                                             </button>
                                             <button class="btn btn-sm btn-outline-danger" onclick="deleteDevice({{ device.id }})">
@@ -252,12 +253,66 @@
                         <input type="text" class="form-control" id="editModel" required>
                     </div>
                     <div class="col-md-6">
+                        <label class="form-label">Serial Number</label>
+                        <input type="text" class="form-control" id="editSerialNumber" required>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Company Tag</label>
+                        <input type="text" class="form-control" id="editCompanyTag" required>
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label">Status</label>
                         <select class="form-select" id="editStatus">
                             {% for status, label in statuses %}
                             <option value="{{ status }}">{{ label }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Purchase Date</label>
+                        <input type="date" class="form-control" id="editPurchaseDate">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Warranty Expiry</label>
+                        <input type="date" class="form-control" id="editWarrantyExpiry">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Assigned Branch</label>
+                        <select class="form-select" id="editAssignedBranch">
+                            <option value="">Head Office / Unassigned</option>
+                            {% for branch in branches %}
+                            <option value="{{ branch.id }}">{{ branch.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Assigned Employee</label>
+                        <select class="form-select" id="editAssignedEmployee">
+                            <option value="">No employee</option>
+                            {% for employee in employees %}
+                            <option value="{{ employee.id }}" data-branch="{{ employee.branch_id|default:'' }}">{{ employee.full_name }} - {{ employee.branch.name|default:'No Branch' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Location Type</label>
+                        <select class="form-select" id="editLocationType">
+                            {% for location_type, label in location_types %}
+                            <option value="{{ location_type }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Current Location</label>
+                        <input type="text" class="form-control" id="editCurrentLocation" required>
                     </div>
                 </div>
                 <div class="mb-3">
@@ -269,6 +324,21 @@
                     <button type="submit" class="btn btn-primary">Update Device</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- View Device Modal -->
+<div class="modal fade" id="viewDeviceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Device Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="row mb-0" id="viewDeviceDetailsList"></dl>
+            </div>
         </div>
     </div>
 </div>
@@ -289,8 +359,17 @@ function loadDevice(deviceId) {
             document.getElementById('editDeviceType').value = data.device_type;
             document.getElementById('editBrand').value = data.brand;
             document.getElementById('editModel').value = data.model;
+            document.getElementById('editSerialNumber').value = data.serial_number;
+            document.getElementById('editCompanyTag').value = data.company_tag;
             document.getElementById('editStatus').value = data.status;
-            document.getElementById('editConditionNotes').value = data.condition_notes;
+            document.getElementById('editPurchaseDate').value = data.purchase_date || '';
+            document.getElementById('editWarrantyExpiry').value = data.warranty_expiry || '';
+            document.getElementById('editAssignedBranch').value = data.assigned_branch || '';
+            document.getElementById('editAssignedEmployee').value = data.assigned_employee || '';
+            document.getElementById('editLocationType').value = data.location_type;
+            document.getElementById('editCurrentLocation').value = data.current_location;
+            document.getElementById('editConditionNotes').value = data.condition_notes || '';
+            filterEditEmployeesByBranch();
         });
 }
 
@@ -298,8 +377,46 @@ function viewDeviceDetails(deviceId) {
     fetch(`/api/devices/${deviceId}/`)
         .then(response => response.json())
         .then(data => {
-            alert(`Device: ${data.company_tag}\nSerial: ${data.serial_number}\nStatus: ${data.status}\nLocation: ${data.current_location}`);
+            const rows = [
+                ['Device Name', `${data.brand || ''} ${data.model || ''}`.trim()],
+                ['Device Type', data.device_type],
+                ['Brand', data.brand],
+                ['Model', data.model],
+                ['Company Tag', data.company_tag],
+                ['Serial Number', data.serial_number],
+                ['Status', data.status],
+                ['Assigned Employee', data.assigned_employee_name],
+                ['Assigned Branch', data.assigned_branch_name],
+                ['Location Type', data.location_type],
+                ['Current Location', data.current_location],
+                ['Purchase Date', data.purchase_date],
+                ['Warranty Expiry', data.warranty_expiry],
+                ['Days Assigned', data.days_assigned],
+                ['Condition Notes', data.condition_notes],
+            ];
+            document.getElementById('viewDeviceDetailsList').innerHTML = rows.map(([label, value]) => `
+                <dt class="col-sm-4 text-muted">${label}</dt>
+                <dd class="col-sm-8">${escapeHtml(value || '-')}</dd>
+            `).join('');
         });
+}
+
+document.getElementById('editAssignedBranch').addEventListener('change', filterEditEmployeesByBranch);
+
+function filterEditEmployeesByBranch() {
+    const branchId = document.getElementById('editAssignedBranch').value;
+    const employeeSelect = document.getElementById('editAssignedEmployee');
+    Array.from(employeeSelect.options).forEach(option => {
+        if (!option.value) {
+            option.hidden = false;
+            return;
+        }
+        option.hidden = branchId && option.dataset.branch !== branchId;
+    });
+    const selected = employeeSelect.options[employeeSelect.selectedIndex];
+    if (selected && selected.hidden) {
+        employeeSelect.value = '';
+    }
 }
 
 document.getElementById('createDeviceForm').addEventListener('submit', function(e) {
@@ -314,6 +431,8 @@ document.getElementById('createDeviceForm').addEventListener('submit', function(
         warranty_expiry: document.getElementById('warrantyExpiry').value || null,
         condition_notes: document.getElementById('conditionNotes').value,
         assigned_branch: parseInt(document.getElementById('locationBranch').value) || null,
+        location_type: document.getElementById('locationBranch').value ? 'BRANCH' : 'HEAD_OFFICE',
+        current_location: document.getElementById('locationBranch').selectedOptions[0].text,
     };
     
     fetch('/api/devices/', {
@@ -337,7 +456,15 @@ document.getElementById('editDeviceForm').addEventListener('submit', function(e)
         device_type: document.getElementById('editDeviceType').value,
         brand: document.getElementById('editBrand').value,
         model: document.getElementById('editModel').value,
+        serial_number: document.getElementById('editSerialNumber').value,
+        company_tag: document.getElementById('editCompanyTag').value,
+        purchase_date: document.getElementById('editPurchaseDate').value || null,
+        warranty_expiry: document.getElementById('editWarrantyExpiry').value || null,
         status: document.getElementById('editStatus').value,
+        assigned_branch: parseInt(document.getElementById('editAssignedBranch').value) || null,
+        assigned_employee: parseInt(document.getElementById('editAssignedEmployee').value) || null,
+        location_type: document.getElementById('editLocationType').value,
+        current_location: document.getElementById('editCurrentLocation').value,
         condition_notes: document.getElementById('editConditionNotes').value,
     };
     
@@ -356,7 +483,7 @@ document.getElementById('editDeviceForm').addEventListener('submit', function(e)
 });
 
 function deleteDevice(deviceId) {
-    if (!confirm('Delete this device and its history?')) return;
+    if (!confirm('Delete this device? Devices with activity/history cannot be deleted.')) return;
 
     fetch(`/api/devices/${deviceId}/`, {
         method: 'DELETE',
@@ -379,6 +506,15 @@ function getApiError(error, fallback) {
     if (error.error) return error.error;
     if (error.detail) return error.detail;
     return JSON.stringify(error);
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
 }
 </script>
 {% endblock %}

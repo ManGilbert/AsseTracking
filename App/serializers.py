@@ -6,7 +6,6 @@ Handles data validation and transformation for API requests/responses.
 
 from rest_framework import serializers
 from django.db import transaction
-from django.utils.text import slugify
 from django.utils import timezone
 from .models import (
     User,
@@ -105,8 +104,14 @@ class EmployeeSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(
         source="department.name", read_only=True
     )
-    login_username = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    login_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
+    login_username = serializers.CharField(write_only=True, required=False, allow_blank=False)
+    login_email = serializers.EmailField(write_only=True, required=False, allow_blank=False)
+    login_role = serializers.ChoiceField(
+        write_only=True,
+        choices=(("EMPLOYEE", "Employee"), ("BRANCH_MANAGER", "Branch Manager")),
+        required=False,
+        default="EMPLOYEE",
+    )
     generated_username = serializers.CharField(source="user.username", read_only=True)
     generated_email = serializers.EmailField(source="user.email", read_only=True)
     default_password = serializers.SerializerMethodField()
@@ -128,6 +133,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "exit_date",
             "login_username",
             "login_email",
+            "login_role",
             "generated_username",
             "generated_email",
             "default_password",
@@ -139,39 +145,36 @@ class EmployeeSerializer(serializers.ModelSerializer):
             return DEFAULT_EMPLOYEE_PASSWORD
         return None
 
-    def _generate_unique_username(self, full_name):
-        base = slugify(full_name).replace("-", ".") or "employee"
-        username = base[:140]
-        counter = 1
+    def validate(self, attrs):
+        if self.instance is None and not attrs.get("user"):
+            errors = {}
+            if not attrs.get("login_username"):
+                errors["login_username"] = "Username is required."
+            if not attrs.get("login_email"):
+                errors["login_email"] = "Email is required."
+            if errors:
+                raise serializers.ValidationError(errors)
 
-        while User.objects.filter(username=username).exists():
-            suffix = f".{counter}"
-            username = f"{base[:150 - len(suffix)]}{suffix}"
-            counter += 1
+        branch = attrs.get("branch") or getattr(self.instance, "branch", None)
+        department = attrs.get("department")
+        if department and branch and department.branch_id != branch.id:
+            raise serializers.ValidationError(
+                {"department": "Department must belong to the selected branch."}
+            )
 
-        return username
-
-    def _generate_unique_email(self, username):
-        base = username.replace(".", "_")
-        email = f"{base}@assetracking.local"
-        counter = 1
-
-        while User.objects.filter(email=email).exists():
-            email = f"{base}{counter}@assetracking.local"
-            counter += 1
-
-        return email
+        return attrs
 
     @transaction.atomic
     def create(self, validated_data):
         login_username = validated_data.pop("login_username", "").strip()
         login_email = validated_data.pop("login_email", "").strip()
+        login_role = validated_data.pop("login_role", "EMPLOYEE")
         user = validated_data.get("user")
         created_user = False
 
         if not user:
-            username = login_username or self._generate_unique_username(validated_data["full_name"])
-            email = login_email or self._generate_unique_email(username)
+            username = login_username
+            email = login_email
 
             if User.objects.filter(username=username).exists():
                 raise serializers.ValidationError({"login_username": "Username already exists."})
@@ -182,12 +185,15 @@ class EmployeeSerializer(serializers.ModelSerializer):
                 username=username,
                 email=email,
                 password=DEFAULT_EMPLOYEE_PASSWORD,
-                role="EMPLOYEE",
+                role=login_role,
             )
             validated_data["user"] = user
             created_user = True
 
         employee = super().create(validated_data)
+        if employee.user and employee.user.role == "BRANCH_MANAGER" and employee.branch:
+            employee.branch.manager = employee
+            employee.branch.save(update_fields=["manager"])
         if created_user:
             employee._generated_default_password = True
         return employee
@@ -198,6 +204,7 @@ class EmployeeListSerializer(serializers.ModelSerializer):
 
     branch_name = serializers.CharField(source="branch.name", read_only=True)
     status = serializers.CharField()
+    assigned_devices = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -207,8 +214,20 @@ class EmployeeListSerializer(serializers.ModelSerializer):
             "position",
             "branch_name",
             "status",
+            "assigned_devices",
         )
         read_only_fields = ("id",)
+
+    def get_assigned_devices(self, obj):
+        return [
+            {
+                "device_name": f"{device.brand} {device.model}".strip(),
+                "device_tag": device.company_tag,
+                "device_serial_number": device.serial_number,
+                "department": obj.department.name if obj.department else None,
+            }
+            for device in obj.device_set.all()
+        ]
 
 
 # =========================
@@ -265,20 +284,47 @@ class DeviceSerializer(serializers.ModelSerializer):
                 ).days
         return None
 
+    def validate(self, attrs):
+        assigned_employee = attrs.get(
+            "assigned_employee",
+            getattr(self.instance, "assigned_employee", None),
+        )
+        assigned_branch = attrs.get(
+            "assigned_branch",
+            getattr(self.instance, "assigned_branch", None),
+        )
+
+        if assigned_employee and assigned_branch and assigned_employee.branch_id != assigned_branch.id:
+            raise serializers.ValidationError(
+                {
+                    "assigned_employee": (
+                        "Assigned employee must belong to the selected branch."
+                    )
+                }
+            )
+
+        return attrs
+
 
 class DeviceListSerializer(serializers.ModelSerializer):
     """List serializer for Device model."""
 
     status = serializers.CharField()
+    assigned_branch_name = serializers.CharField(source="assigned_branch.name", read_only=True)
 
     class Meta:
         model = Device
         fields = (
             "id",
             "device_type",
+            "brand",
+            "model",
             "serial_number",
             "company_tag",
             "status",
+            "assigned_branch",
+            "assigned_branch_name",
+            "location_type",
         )
         read_only_fields = ("id",)
 
