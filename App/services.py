@@ -294,6 +294,54 @@ class RepairService:
             return repair_request
 
     @staticmethod
+    def start_repair(repair_request_id, technician_user, notes=None, parts_used=None):
+        """
+        Start work on an approved repair request.
+
+        Creates or updates a repair log, moves the request to IN_PROGRESS, and
+        keeps the device in repair while the technician works on it.
+        """
+        repair_request = RepairRequest.objects.get(id=repair_request_id)
+        device = repair_request.device
+
+        if repair_request.status != "APPROVED":
+            raise ValueError("Can only start approved repair requests")
+
+        with transaction.atomic():
+            repair_log, created = RepairLog.objects.get_or_create(
+                repair_request=repair_request,
+                defaults={
+                    "technician": technician_user,
+                    "notes": notes or "",
+                    "parts_used": parts_used or "",
+                },
+            )
+
+            if not created:
+                repair_log.technician = technician_user
+                if notes is not None:
+                    repair_log.notes = notes
+                if parts_used is not None:
+                    repair_log.parts_used = parts_used
+                repair_log.save()
+
+            repair_request.status = "IN_PROGRESS"
+            repair_request.save()
+
+            device.status = "IN_REPAIR"
+            device.save()
+
+            AuditLog.objects.create(
+                user=technician_user,
+                action="REPAIR_STARTED",
+                model_name="RepairRequest",
+                object_id=repair_request.id,
+                details=f"Started by {technician_user.username}",
+            )
+
+            return repair_log
+
+    @staticmethod
     def complete_repair(repair_request_id, technician_user, notes, parts_used=None):
         """
         Complete repair by technician.
@@ -310,9 +358,9 @@ class RepairService:
         repair_request = RepairRequest.objects.get(id=repair_request_id)
         device = repair_request.device
 
-        if repair_request.status != "APPROVED":
+        if repair_request.status not in ["APPROVED", "IN_PROGRESS"]:
             raise ValueError(
-                "Can only complete approved repair requests"
+                "Can only complete approved or in-progress repair requests"
             )
 
         with transaction.atomic():
@@ -332,8 +380,8 @@ class RepairService:
             repair_request.status = "COMPLETED"
             repair_request.save()
 
-            # Update device status back to ASSIGNED
-            device.status = "ASSIGNED"
+            # Mark device repaired; Head Office can return it to assignment flow.
+            device.status = "REPAIRED"
             device.save()
 
             # Create audit log

@@ -4,12 +4,85 @@
 {% block title %}Technician Dashboard{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row">
+<div class="container-fluid py-4">
+    <div class="row mb-4">
         <div class="col-12">
-            <h1 class="mb-3">Technician Dashboard</h1>
-            <p class="lead">Welcome back, {{ request.user.get_full_name|default:request.user.username }}.</p>
-            <p>Track repair jobs, update repair logs, and complete assigned tasks here.</p>
+            <h1 class="h3 mb-0"><i class="feather-tool me-2"></i>Technician Dashboard</h1>
+            <p class="text-muted mb-0">Repair queue, work in progress, and completed maintenance</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-2">
+            <div class="card"><div class="card-body">
+                <h6 class="text-muted">Approved Queue</h6>
+                <h2 class="mb-0">{{ approved_repairs.count }}</h2>
+            </div></div>
+        </div>
+        <div class="col-md-4 mb-2">
+            <div class="card"><div class="card-body">
+                <h6 class="text-muted">In Progress</h6>
+                <h2 class="mb-0">{{ in_progress_repairs.count }}</h2>
+            </div></div>
+        </div>
+        <div class="col-md-4 mb-2">
+            <div class="card"><div class="card-body">
+                <h6 class="text-muted">Completed Today</h6>
+                <h2 class="mb-0">{{ completed_today }}</h2>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Repair Queue</h5>
+                    <a class="btn btn-sm btn-primary" href="{% url 'technician_repairs' %}">Open Queue</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr><th>Device</th><th>Employee</th><th>Priority</th><th>Date</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for repair in approved_repairs|slice:":6" %}
+                                <tr>
+                                    <td><span class="badge bg-info">{{ repair.device.company_tag }}</span> {{ repair.device.device_type }}</td>
+                                    <td>{{ repair.employee.full_name }}</td>
+                                    <td>{{ repair.priority }}</td>
+                                    <td>{{ repair.request_date|date:"M d, Y" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-center text-muted py-4">No approved repairs waiting</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Current Work</h5>
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'technician_in_progress_repairs' %}">View All</a>
+                </div>
+                <div class="card-body">
+                    {% for repair in in_progress_repairs|slice:":5" %}
+                    <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                        <div>
+                            <strong>{{ repair.device.company_tag }}</strong>
+                            <div class="small text-muted">{{ repair.issue_description|truncatechars:70 }}</div>
+                        </div>
+                        <span class="badge bg-warning text-dark">IN_PROGRESS</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted mb-0">No repairs in progress.</p>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
 </div>

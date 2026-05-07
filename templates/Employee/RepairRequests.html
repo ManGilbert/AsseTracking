@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Repair Requests{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="feather-file-text me-2"></i>My Repair Requests</h1>
+                    <p class="text-muted mb-0">Track repair status and history for your devices</p>
+                </div>
+                <a class="btn btn-primary" href="{% url 'employee_request_repair' %}">
+                    <i class="feather-plus me-1"></i>New Request
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+            <h5 class="card-title mb-0">Repair Requests ({{ repairs.count }})</h5>
+            <input type="search" class="form-control" style="max-width: 320px;" data-table-search="#repairRequestsTable" placeholder="Search requests...">
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="repairRequestsTable">
+                    <thead class="table-light">
+                        <tr><th>Device</th><th>Issue</th><th>Priority</th><th>Status</th><th>Requested</th><th>Approved By</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for repair in repairs %}
+                        <tr>
+                            <td><span class="badge bg-info">{{ repair.device.company_tag }}</span><div class="small text-muted">{{ repair.device.brand }} {{ repair.device.model }}</div></td>
+                            <td>{{ repair.issue_description|truncatechars:100 }}</td>
+                            <td>{{ repair.priority }}</td>
+                            <td><span class="badge bg-light text-dark">{{ repair.status }}</span></td>
+                            <td>{{ repair.request_date|date:"M d, Y H:i" }}</td>
+                            <td>{{ repair.approved_by.username|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">No repair requests</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -4,12 +4,57 @@
 {% block title %}Employee Dashboard{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row">
+<div class="container-fluid py-4">
+    <div class="row mb-4">
         <div class="col-12">
-            <h1 class="mb-3">Employee Dashboard</h1>
-            <p class="lead">Welcome back, {{ request.user.get_full_name|default:request.user.username }}.</p>
-            <p>View your assigned devices, repair requests, and personal device history here.</p>
+            <h1 class="h3 mb-0"><i class="feather-user me-2"></i>Employee Dashboard</h1>
+            <p class="text-muted mb-0">Your devices, repair requests, and repair status</p>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3 mb-2"><div class="card"><div class="card-body"><h6 class="text-muted">My Devices</h6><h2 class="mb-0">{{ devices.count }}</h2></div></div></div>
+        <div class="col-md-3 mb-2"><div class="card"><div class="card-body"><h6 class="text-muted">Pending</h6><h2 class="mb-0">{{ pending_repairs }}</h2></div></div></div>
+        <div class="col-md-3 mb-2"><div class="card"><div class="card-body"><h6 class="text-muted">In Progress</h6><h2 class="mb-0">{{ in_progress_repairs }}</h2></div></div></div>
+        <div class="col-md-3 mb-2"><div class="card"><div class="card-body"><h6 class="text-muted">Completed</h6><h2 class="mb-0">{{ completed_repairs }}</h2></div></div></div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">My Devices</h5>
+                    <a class="btn btn-sm btn-primary" href="{% url 'employee_my_devices' %}">View Devices</a>
+                </div>
+                <div class="card-body">
+                    {% for device in devices|slice:":5" %}
+                    <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                        <div><strong>{{ device.company_tag }}</strong><div class="small text-muted">{{ device.brand }} {{ device.model }}</div></div>
+                        <span class="badge bg-light text-dark">{{ device.status }}</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted mb-0">No devices assigned to you.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Recent Repair Requests</h5>
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'employee_repair_requests' %}">View History</a>
+                </div>
+                <div class="card-body">
+                    {% for repair in repairs|slice:":5" %}
+                    <div class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                        <div><strong>{{ repair.device.company_tag }}</strong><div class="small text-muted">{{ repair.issue_description|truncatechars:70 }}</div></div>
+                        <span class="badge bg-light text-dark">{{ repair.status }}</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted mb-0">No repair requests yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
 </div>

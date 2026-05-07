@@ -17,6 +17,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import (
     User,
@@ -375,6 +376,13 @@ class DeviceViewSet(viewsets.ModelViewSet):
     ordering_fields = ["status", "purchase_date"]
     ordering = ["-purchase_date"]
 
+    def get_queryset(self):
+        queryset = Device.objects.select_related("assigned_employee", "assigned_branch")
+        user = self.request.user
+        if user.is_authenticated and user.role == "EMPLOYEE":
+            return queryset.filter(assigned_employee__user=user)
+        return queryset
+
     def get_serializer_class(self):
         if self.action == "list":
             return DeviceListSerializer
@@ -574,6 +582,21 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
     search_fields = ["device__company_tag", "issue_description"]
     ordering = ["-request_date"]
 
+    def get_queryset(self):
+        queryset = RepairRequest.objects.select_related(
+            "device",
+            "device__assigned_branch",
+            "device__assigned_employee",
+            "employee",
+            "approved_by",
+        )
+        user = self.request.user
+        if user.is_authenticated and user.role == "EMPLOYEE":
+            return queryset.filter(employee__user=user)
+        if user.is_authenticated and user.role == "TECHNICIAN":
+            return queryset.filter(status__in=["APPROVED", "IN_PROGRESS", "COMPLETED"])
+        return queryset
+
     def get_serializer_class(self):
         if self.action == "list":
             return RepairRequestListSerializer
@@ -705,6 +728,45 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
                 {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
 
+    @action(detail=True, methods=["post"], permission_classes=[CanUpdateRepair])
+    def start_repair(self, request, pk=None):
+        """Start an approved repair request."""
+        repair_request = self.get_object()
+        notes = request.data.get("notes", "")
+        parts_used = request.data.get("parts_used", "")
+
+        try:
+            repair_log = RepairService.start_repair(
+                repair_request.id,
+                request.user,
+                notes,
+                parts_used,
+            )
+            return Response(RepairLogSerializer(repair_log).data, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["post"], permission_classes=[CanUpdateRepair])
+    def complete_repair(self, request, pk=None):
+        """Complete an approved or in-progress repair request."""
+        repair_request = self.get_object()
+        notes = request.data.get("notes")
+        parts_used = request.data.get("parts_used", "")
+
+        if not notes:
+            return Response({"error": "notes is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            repair_log = RepairService.complete_repair(
+                repair_request.id,
+                request.user,
+                notes,
+                parts_used,
+            )
+            return Response(RepairLogSerializer(repair_log).data, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 # =========================
 # REPAIR LOG VIEWSET
@@ -730,6 +792,20 @@ class RepairLogViewSet(viewsets.ModelViewSet):
         "technician__username",
     ]
     ordering = ["-start_date"]
+
+    def get_queryset(self):
+        queryset = RepairLog.objects.select_related(
+            "repair_request",
+            "repair_request__device",
+            "repair_request__employee",
+            "technician",
+        )
+        user = self.request.user
+        if user.is_authenticated and user.role == "TECHNICIAN":
+            return queryset.filter(Q(technician=user) | Q(repair_request__status="COMPLETED"))
+        if user.is_authenticated and user.role == "EMPLOYEE":
+            return queryset.filter(repair_request__employee__user=user)
+        return queryset
 
     def get_permissions(self):
         if self.action in ["update_repair", "partial_update", "update"]:
@@ -1177,13 +1253,104 @@ def branch_manager_dashboard(request):
 @login_required
 @role_required("EMPLOYEE")
 def employee_dashboard(request):
-    return render(request, "Employee/Dashboard.html")
+    employee = Employee.objects.filter(user=request.user).first()
+    devices = Device.objects.filter(assigned_employee=employee) if employee else Device.objects.none()
+    repairs = RepairRequest.objects.filter(employee=employee) if employee else RepairRequest.objects.none()
+    context = {
+        "employee": employee,
+        "devices": devices,
+        "repairs": repairs.select_related("device") if employee else repairs,
+        "pending_repairs": repairs.filter(status="PENDING").count() if employee else 0,
+        "approved_repairs": repairs.filter(status="APPROVED").count() if employee else 0,
+        "in_progress_repairs": repairs.filter(status="IN_PROGRESS").count() if employee else 0,
+        "completed_repairs": repairs.filter(status="COMPLETED").count() if employee else 0,
+    }
+    return render(request, "Employee/Dashboard.html", context)
 
 
 @login_required
 @role_required("TECHNICIAN")
 def technician_dashboard(request):
-    return render(request, "Technician/Dashboard.html")
+    repairs = RepairRequest.objects.select_related("device", "employee").filter(
+        status__in=["APPROVED", "IN_PROGRESS", "COMPLETED"]
+    )
+    context = {
+        "approved_repairs": repairs.filter(status="APPROVED"),
+        "in_progress_repairs": repairs.filter(status="IN_PROGRESS"),
+        "completed_today": repairs.filter(
+            status="COMPLETED",
+            repairlog__completed_date__date=timezone.localdate(),
+        ).count(),
+        "completed_repairs": repairs.filter(status="COMPLETED").order_by("-request_date")[:5],
+    }
+    return render(request, "Technician/Dashboard.html", context)
+
+
+@login_required
+@role_required("TECHNICIAN")
+def technician_repairs(request):
+    repairs = RepairRequest.objects.select_related(
+        "device", "device__assigned_branch", "device__assigned_employee", "employee"
+    ).filter(status="APPROVED").order_by("-request_date")
+    return render(request, "Technician/Repairs.html", {"repairs": repairs})
+
+
+@login_required
+@role_required("TECHNICIAN")
+def technician_in_progress_repairs(request):
+    repairs = RepairRequest.objects.select_related(
+        "device", "device__assigned_branch", "employee"
+    ).filter(status="IN_PROGRESS").order_by("-request_date")
+    return render(request, "Technician/InProgressRepairs.html", {"repairs": repairs})
+
+
+@login_required
+@role_required("TECHNICIAN")
+def technician_completed_repairs(request):
+    repair_logs = RepairLog.objects.select_related(
+        "repair_request", "repair_request__device", "repair_request__employee", "technician"
+    ).filter(repair_request__status="COMPLETED").order_by("-completed_date", "-start_date")
+    return render(request, "Technician/CompletedRepairs.html", {"repair_logs": repair_logs})
+
+
+@login_required
+@role_required("TECHNICIAN")
+def technician_device_lookup(request):
+    devices = Device.objects.select_related("assigned_employee", "assigned_branch").all().order_by("company_tag")
+    return render(request, "Technician/DeviceLookup.html", {"devices": devices})
+
+
+@login_required
+@role_required("TECHNICIAN")
+def technician_repair_history(request):
+    repair_logs = RepairLog.objects.select_related(
+        "repair_request", "repair_request__device", "repair_request__employee", "technician"
+    ).all().order_by("-start_date")
+    return render(request, "Technician/RepairHistory.html", {"repair_logs": repair_logs})
+
+
+@login_required
+@role_required("EMPLOYEE")
+def employee_my_devices(request):
+    employee = Employee.objects.filter(user=request.user).first()
+    devices = Device.objects.select_related("assigned_branch").filter(assigned_employee=employee) if employee else Device.objects.none()
+    return render(request, "Employee/MyDevices.html", {"employee": employee, "devices": devices})
+
+
+@login_required
+@role_required("EMPLOYEE")
+def employee_request_repair(request):
+    employee = Employee.objects.filter(user=request.user).first()
+    devices = Device.objects.filter(assigned_employee=employee).exclude(status__in=["RETIRED", "MISSING"]) if employee else Device.objects.none()
+    return render(request, "Employee/RequestRepair.html", {"employee": employee, "devices": devices})
+
+
+@login_required
+@role_required("EMPLOYEE")
+def employee_repair_requests(request):
+    employee = Employee.objects.filter(user=request.user).first()
+    repairs = RepairRequest.objects.select_related("device", "approved_by").filter(employee=employee).order_by("-request_date") if employee else RepairRequest.objects.none()
+    return render(request, "Employee/RepairRequests.html", {"employee": employee, "repairs": repairs})
 
 
 # =========================

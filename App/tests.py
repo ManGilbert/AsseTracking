@@ -225,3 +225,116 @@ class HeadOfficeWorkflowApiTests(TestCase):
         self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
         self.assertTrue(approve_response.data["approved_by_head_office"])
         self.assertIsNotNone(InventorySession.objects.get(id=create_response.data["id"]).end_date)
+
+    def test_technician_can_render_pages_and_complete_repair(self):
+        technician = User.objects.create_user(
+            username="tech.one",
+            email="tech.one@example.com",
+            password="Password123!",
+            role="TECHNICIAN",
+        )
+        employee_user = User.objects.create_user(
+            username="employee.techflow",
+            email="employee.techflow@example.com",
+            password="Password123!",
+            role="EMPLOYEE",
+        )
+        employee = Employee.objects.create(
+            user=employee_user,
+            full_name="Employee Tech Flow",
+            position="Clerk",
+            branch=self.branch,
+            hire_date="2026-05-06",
+        )
+        device = Device.objects.create(
+            device_type="Laptop",
+            brand="Dell",
+            model="Latitude",
+            serial_number="SN-TECH-1",
+            company_tag="TAG-TECH-1",
+            status="ASSIGNED",
+            assigned_employee=employee,
+            assigned_branch=self.branch,
+            location_type="EMPLOYEE",
+            current_location="Main Branch - Employee Tech Flow",
+        )
+        repair = RepairRequest.objects.create(
+            device=device,
+            employee=employee,
+            issue_description="Battery failing",
+            priority="HIGH",
+            status="APPROVED",
+            approved_by=self.head_office,
+        )
+        self.client.force_login(technician)
+
+        for url in [
+            "/dashboard/technician/",
+            "/technician/repairs/",
+            "/technician/in-progress/",
+            "/technician/completed/",
+            "/technician/device-lookup/",
+            "/technician/repair-history/",
+        ]:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(technician)
+        start_response = self.client.post(
+            f"/api/repair-requests/{repair.id}/start_repair/",
+            {"notes": "Diagnosed battery fault", "parts_used": "Battery"},
+            format="json",
+        )
+        self.assertEqual(start_response.status_code, status.HTTP_200_OK)
+        repair.refresh_from_db()
+        device.refresh_from_db()
+        self.assertEqual(repair.status, "IN_PROGRESS")
+        self.assertEqual(device.status, "IN_REPAIR")
+
+        complete_response = self.client.post(
+            f"/api/repair-requests/{repair.id}/complete_repair/",
+            {"notes": "Battery replaced", "parts_used": "Battery"},
+            format="json",
+        )
+        self.assertEqual(complete_response.status_code, status.HTTP_200_OK)
+        repair.refresh_from_db()
+        device.refresh_from_db()
+        self.assertEqual(repair.status, "COMPLETED")
+        self.assertEqual(device.status, "REPAIRED")
+
+    def test_employee_pages_render_for_own_devices_and_repairs(self):
+        employee_user = User.objects.create_user(
+            username="employee.pages",
+            email="employee.pages@example.com",
+            password="Password123!",
+            role="EMPLOYEE",
+        )
+        employee = Employee.objects.create(
+            user=employee_user,
+            full_name="Employee Pages",
+            position="Analyst",
+            branch=self.branch,
+            hire_date="2026-05-06",
+        )
+        Device.objects.create(
+            device_type="Laptop",
+            brand="HP",
+            model="EliteBook",
+            serial_number="SN-EMP-PAGE-1",
+            company_tag="TAG-EMP-PAGE-1",
+            status="ASSIGNED",
+            assigned_employee=employee,
+            assigned_branch=self.branch,
+            location_type="EMPLOYEE",
+            current_location="Main Branch - Employee Pages",
+        )
+        self.client.force_login(employee_user)
+
+        for url in [
+            "/dashboard/employee/",
+            "/employee/my-devices/",
+            "/employee/request-repair/",
+            "/employee/repair-requests/",
+        ]:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)

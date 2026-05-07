@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Request Repair{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0"><i class="feather-alert-circle me-2"></i>Request Repair</h1>
+            <p class="text-muted mb-0">Submit a repair request for one of your assigned devices</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header"><h5 class="card-title mb-0">New Repair Request</h5></div>
+                <form id="requestRepairForm" class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Device <span class="text-danger">*</span></label>
+                        <select class="form-select" id="deviceId" required>
+                            <option value="">Select Device</option>
+                            {% for device in devices %}
+                            <option value="{{ device.id }}">{{ device.company_tag }} - {{ device.brand }} {{ device.model }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Priority <span class="text-danger">*</span></label>
+                        <select class="form-select" id="priority" required>
+                            <option value="NORMAL">Normal</option>
+                            <option value="HIGH">High</option>
+                            <option value="LOW">Low</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Issue Description <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="issueDescription" rows="5" required></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <a class="btn btn-secondary" href="{% url 'employee_repair_requests' %}">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header"><h5 class="card-title mb-0">Available Devices</h5></div>
+                <div class="card-body">
+                    {% for device in devices %}
+                    <div class="border-bottom pb-2 mb-2">
+                        <strong>{{ device.company_tag }}</strong>
+                        <div class="small text-muted">{{ device.device_type }} | {{ device.status }}</div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted mb-0">No devices are available for repair requests.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('requestRepairForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    fetch('/api/repair-requests/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({
+            device_id: parseInt(document.getElementById('deviceId').value),
+            priority: document.getElementById('priority').value,
+            issue_description: document.getElementById('issueDescription').value,
+        })
+    }).then(response => {
+        if (response.ok) location.href = "{% url 'employee_repair_requests' %}";
+        else response.json().then(e => alert(getApiError(e, 'Error creating repair request')));
+    });
+});
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
+}
+</script>
+{% endblock %}

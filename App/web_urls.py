@@ -14,7 +14,15 @@ from .views import (
     head_office_audit_logs,
     branch_manager_dashboard,
     employee_dashboard,
+    employee_my_devices,
+    employee_request_repair,
+    employee_repair_requests,
     technician_dashboard,
+    technician_repairs,
+    technician_in_progress_repairs,
+    technician_completed_repairs,
+    technician_device_lookup,
+    technician_repair_history,
 )
 
 urlpatterns = [
@@ -36,5 +44,13 @@ urlpatterns = [
     # Other Dashboards
     path("dashboard/branch/", branch_manager_dashboard, name="branch_manager_dashboard"),
     path("dashboard/employee/", employee_dashboard, name="employee_dashboard"),
+    path("employee/my-devices/", employee_my_devices, name="employee_my_devices"),
+    path("employee/request-repair/", employee_request_repair, name="employee_request_repair"),
+    path("employee/repair-requests/", employee_repair_requests, name="employee_repair_requests"),
     path("dashboard/technician/", technician_dashboard, name="technician_dashboard"),
+    path("technician/repairs/", technician_repairs, name="technician_repairs"),
+    path("technician/in-progress/", technician_in_progress_repairs, name="technician_in_progress_repairs"),
+    path("technician/completed/", technician_completed_repairs, name="technician_completed_repairs"),
+    path("technician/device-lookup/", technician_device_lookup, name="technician_device_lookup"),
+    path("technician/repair-history/", technician_repair_history, name="technician_repair_history"),
 ]

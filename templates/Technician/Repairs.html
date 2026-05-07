@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Repair Queue{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0"><i class="feather-list me-2"></i>Repair Queue</h1>
+            <p class="text-muted mb-0">Approved repair requests ready for technician work</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+            <h5 class="card-title mb-0">Approved Repairs ({{ repairs.count }})</h5>
+            <input type="search" class="form-control" style="max-width: 320px;" data-table-search="#repairQueueTable" placeholder="Search queue...">
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="repairQueueTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Device</th><th>Employee</th><th>Branch</th><th>Issue</th><th>Priority</th><th>Requested</th><th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for repair in repairs %}
+                        <tr>
+                            <td><span class="badge bg-info">{{ repair.device.company_tag }}</span><div class="small text-muted">{{ repair.device.brand }} {{ repair.device.model }}</div></td>
+                            <td>{{ repair.employee.full_name }}</td>
+                            <td>{{ repair.device.assigned_branch.name|default:"-" }}</td>
+                            <td>{{ repair.issue_description|truncatechars:80 }}</td>
+                            <td><span class="badge bg-warning text-dark">{{ repair.priority }}</span></td>
+                            <td>{{ repair.request_date|date:"M d, Y H:i" }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#startRepairModal"
+                                        onclick="prepareStartRepair({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
+                                    <i class="feather-play me-1"></i>Start
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No approved repairs</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="startRepairModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Start Repair</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="startRepairForm" class="modal-body">
+                <input type="hidden" id="startRepairId">
+                <div class="alert alert-info">Device: <strong id="startRepairDevice"></strong></div>
+                <div class="mb-3">
+                    <label class="form-label">Diagnosis / Findings</label>
+                    <textarea class="form-control" id="startNotes" rows="3"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Parts or Materials</label>
+                    <textarea class="form-control" id="startParts" rows="2"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Start Repair</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function prepareStartRepair(id, tag) {
+    document.getElementById('startRepairId').value = id;
+    document.getElementById('startRepairDevice').textContent = tag;
+}
+
+document.getElementById('startRepairForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const id = document.getElementById('startRepairId').value;
+    fetch(`/api/repair-requests/${id}/start_repair/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({
+            notes: document.getElementById('startNotes').value,
+            parts_used: document.getElementById('startParts').value,
+        })
+    }).then(response => {
+        if (response.ok) location.href = "{% url 'technician_in_progress_repairs' %}";
+        else response.json().then(e => alert(getApiError(e, 'Error starting repair')));
+    });
+});
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
+}
+</script>
+{% endblock %}

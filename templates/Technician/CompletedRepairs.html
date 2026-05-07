@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Completed Repairs{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0"><i class="feather-check-circle me-2"></i>Completed Repairs</h1>
+            <p class="text-muted mb-0">Completed repair logs and parts used</p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+            <h5 class="card-title mb-0">Completed Repairs ({{ repair_logs.count }})</h5>
+            <input type="search" class="form-control" style="max-width: 320px;" data-table-search="#completedTable" placeholder="Search completed repairs...">
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="completedTable">
+                    <thead class="table-light">
+                        <tr><th>Device</th><th>Employee</th><th>Technician</th><th>Notes</th><th>Parts Used</th><th>Completed</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for log in repair_logs %}
+                        <tr>
+                            <td><span class="badge bg-secondary">{{ log.repair_request.device.company_tag }}</span><div class="small text-muted">{{ log.repair_request.device.brand }} {{ log.repair_request.device.model }}</div></td>
+                            <td>{{ log.repair_request.employee.full_name }}</td>
+                            <td>{{ log.technician.username|default:"-" }}</td>
+                            <td>{{ log.notes|truncatechars:100 }}</td>
+                            <td>{{ log.parts_used|default:"-"|truncatechars:80 }}</td>
+                            <td>{{ log.completed_date|date:"M d, Y H:i"|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">No completed repairs</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

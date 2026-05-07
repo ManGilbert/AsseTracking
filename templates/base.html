@@ -87,9 +87,9 @@
                                     <span class="nxl-mtext">Employee</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
                                 </a>
                                 <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="#">My Devices</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Request Repair</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Repair Requests</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_my_devices' %}">My Devices</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_request_repair' %}">Request Repair</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_repair_requests' %}">Repair Requests</a></li>
                                 </ul>
                             </li>
                         {% endif %}
@@ -100,11 +100,11 @@
                                     <span class="nxl-mtext">Technician</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
                                 </a>
                                 <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Repairs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">In Progress Repairs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Completed Repairs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Device Lookup</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Repair History</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_repairs' %}">Repairs</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_in_progress_repairs' %}">In Progress Repairs</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_completed_repairs' %}">Completed Repairs</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_device_lookup' %}">Device Lookup</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_repair_history' %}">Repair History</a></li>
                                 </ul>
                             </li>
                         {% endif %}

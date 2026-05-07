@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Devices{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0"><i class="feather-monitor me-2"></i>My Devices</h1>
+            <p class="text-muted mb-0">Devices currently assigned to you</p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+            <h5 class="card-title mb-0">Assigned Devices ({{ devices.count }})</h5>
+            <input type="search" class="form-control" style="max-width: 320px;" data-table-search="#myDevicesTable" placeholder="Search devices...">
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="myDevicesTable">
+                    <thead class="table-light">
+                        <tr><th>Tag</th><th>Device</th><th>Serial</th><th>Status</th><th>Warranty</th><th>Condition</th><th>Location</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for device in devices %}
+                        <tr>
+                            <td><span class="badge bg-info">{{ device.company_tag }}</span></td>
+                            <td>{{ device.device_type }}<div class="small text-muted">{{ device.brand }} {{ device.model }}</div></td>
+                            <td>{{ device.serial_number }}</td>
+                            <td><span class="badge bg-light text-dark">{{ device.status }}</span></td>
+                            <td>{{ device.warranty_expiry|date:"M d, Y"|default:"-" }}</td>
+                            <td>{{ device.condition_notes|default:"-"|truncatechars:80 }}</td>
+                            <td>{{ device.current_location }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No assigned devices</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
