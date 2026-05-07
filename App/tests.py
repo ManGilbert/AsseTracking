@@ -300,7 +300,7 @@ class HeadOfficeWorkflowApiTests(TestCase):
         repair.refresh_from_db()
         device.refresh_from_db()
         self.assertEqual(repair.status, "COMPLETED")
-        self.assertEqual(device.status, "REPAIRED")
+        self.assertEqual(device.status, "COMPLETED")
 
     def test_employee_pages_render_for_own_devices_and_repairs(self):
         employee_user = User.objects.create_user(

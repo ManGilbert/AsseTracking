@@ -71,7 +71,7 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
-                                        <button class="btn btn-sm btn-outline-primary" onclick="viewSession({{ session.id }})">
+                                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inventorySession{{ session.id }}">
                                             <i class="feather-eye me-1"></i>View
                                         </button>
                                         {% if not session.approved_by_head_office %}
@@ -105,6 +105,56 @@
     </div>
 </div>
 
+{% for session in inventory_sessions %}
+<div class="modal fade" id="inventorySession{{ session.id }}" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{{ session.branch.name }} Inventory Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3"><strong>Start</strong><div>{{ session.start_date|date:"M d, Y H:i" }}</div></div>
+                    <div class="col-md-3"><strong>End</strong><div>{{ session.end_date|date:"M d, Y H:i"|default:"In progress" }}</div></div>
+                    <div class="col-md-3"><strong>Branch Approval</strong><div>{{ session.approved_by_branch|yesno:"Approved,Pending" }}</div></div>
+                    <div class="col-md-3"><strong>Head Office Approval</strong><div>{{ session.approved_by_head_office|yesno:"Approved,Pending" }}</div></div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr><th>Check</th><th>Device</th><th>Tag</th><th>Assigned Employee</th><th>Status</th><th>Comment</th><th class="text-end">Mark</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for item in session.items.all %}
+                            <tr>
+                                <td><input type="checkbox" class="form-check-input" {% if item.status == 'VERIFIED' %}checked{% endif %} disabled></td>
+                                <td>{{ item.device.device_type }} - {{ item.device.brand }} {{ item.device.model }}</td>
+                                <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
+                                <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
+                                <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
+                                <td>{{ item.comment|default:"-" }}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-success" onclick="markInventoryItem({{ item.id }}, 'mark_verified')">Verified</button>
+                                    <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_missing')">Missing</button>
+                                    <button class="btn btn-sm btn-outline-info" onclick="markInventoryItem({{ item.id }}, 'mark_extra')">Extra</button>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="7" class="text-center text-muted py-4">No inventory items.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info mb-0">
+                    Found an unregistered device during inventory? Register it from Head Office Devices, then include the tag in the inventory comments.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
 <!-- Create Session Modal -->
 <div class="modal fade" id="createSessionModal" tabindex="-1">
     <div class="modal-dialog">
@@ -123,6 +173,14 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label">Start Date/Time</label>
+                    <input type="datetime-local" class="form-control" id="sessionStartDate">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">End Date/Time</label>
+                    <input type="datetime-local" class="form-control" id="sessionEndDate">
+                </div>
                 <div class="alert alert-info">
                     <i class="feather-info me-2"></i>
                     <small>A new inventory session will be created for the selected branch. Devices in this branch will need to be verified or marked as missing.</small>
@@ -137,14 +195,6 @@
 </div>
 
 <script>
-function viewSession(sessionId) {
-    fetch(`/api/inventory-sessions/${sessionId}/`)
-        .then(response => response.json())
-        .then(data => {
-            alert(`Session ID: ${data.id}\nBranch: ${data.branch_name}\nStart: ${new Date(data.start_date).toLocaleString()}\nApproved by Branch: ${data.approved_by_branch}\nApproved by Head Office: ${data.approved_by_head_office}`);
-        });
-}
-
 function approveInventorySession(sessionId) {
     if (!confirm('Approve this inventory session for Head Office?')) return;
 
@@ -193,9 +243,11 @@ document.getElementById('createSessionForm').addEventListener('submit', function
         return;
     }
     
-    const data = {
-        branch_id: parseInt(branchId)
-    };
+    const data = { branch_id: parseInt(branchId) };
+    const startDate = document.getElementById('sessionStartDate').value;
+    const endDate = document.getElementById('sessionEndDate').value;
+    if (startDate) data.start_date = startDate;
+    if (endDate) data.end_date = endDate;
     
     fetch('/api/inventory-sessions/', {
         method: 'POST',
@@ -214,6 +266,19 @@ document.getElementById('createSessionForm').addEventListener('submit', function
         }
     });
 });
+
+function markInventoryItem(itemId, action) {
+    const comment = prompt('Comment (damaged, wrong location, not found, or other update):', '');
+    if (comment === null) return;
+    fetch(`/api/inventory-items/${itemId}/${action}/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({comment})
+    }).then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error updating inventory item')));
+    });
+}
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;

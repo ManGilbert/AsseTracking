@@ -18,6 +18,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from .models import (
     User,
@@ -605,7 +606,7 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "create":
             return [IsAuthenticated()]
-        elif self.action in ["approve", "reject"]:
+        elif self.action in ["approve", "reject", "reassign_completed"]:
             return [IsHeadOffice()]
         elif self.action in ["update", "partial_update", "destroy"]:
             return [IsHeadOffice()]
@@ -767,6 +768,31 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
+    def reassign_completed(self, request, pk=None):
+        """Reassign a completed repaired device back to its requesting employee."""
+        repair_request = self.get_object()
+        if repair_request.status != "COMPLETED":
+            return Response(
+                {"error": "Only completed repairs can be reassigned."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        condition = request.data.get("condition_on_issue", "Reassigned after completed repair")
+        try:
+            assignment = DeviceAssignmentService.assign_device(
+                device_id=repair_request.device_id,
+                employee_id=repair_request.employee_id,
+                assigned_by_user=request.user,
+                condition=condition,
+            )
+            return Response(
+                DeviceAssignmentSerializer(assignment).data,
+                status=status.HTTP_200_OK,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 # =========================
 # REPAIR LOG VIEWSET
@@ -877,14 +903,19 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             "partial_update",
             "destroy",
             "approve_head_office",
+            "approve_branch",
             "close",
         ]:
+            if self.action == "approve_branch":
+                return [CanVerifyInventory()]
             return [CanCreateInventorySession()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
         """Create inventory session."""
         branch_id = request.data.get("branch_id")
+        start_date = parse_datetime(request.data.get("start_date", "")) if request.data.get("start_date") else None
+        end_date = parse_datetime(request.data.get("end_date", "")) if request.data.get("end_date") else None
 
         if not branch_id:
             return Response(
@@ -894,7 +925,7 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
 
         try:
             session = InventoryService.create_inventory_session(
-                branch_id, request.user
+                branch_id, request.user, start_date=start_date, end_date=end_date
             )
 
             serializer = InventorySessionSerializer(session)
@@ -961,6 +992,20 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
         )
         return Response(self.get_serializer(session).data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=["post"], permission_classes=[CanVerifyInventory])
+    def approve_branch(self, request, pk=None):
+        session = self.get_object()
+        session.approved_by_branch = True
+        session.save(update_fields=["approved_by_branch"])
+        AuditService.log_action(
+            request.user,
+            "INVENTORY_APPROVED_BRANCH",
+            "InventorySession",
+            session.id,
+            f"Session for {session.branch.name}",
+        )
+        return Response(self.get_serializer(session).data, status=status.HTTP_200_OK)
+
 
 # =========================
 # INVENTORY ITEM VIEWSET
@@ -989,6 +1034,7 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         if self.action in [
             "mark_verified",
             "mark_missing",
+            "mark_extra",
             "update",
             "partial_update",
         ]:
@@ -1048,6 +1094,26 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST
             )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[CanVerifyInventory],
+    )
+    def mark_extra(self, request, pk=None):
+        item = self.get_object()
+        comment = request.data.get("comment", "")
+        item.status = "EXTRA"
+        item.comment = comment
+        item.save(update_fields=["status", "comment"])
+        AuditService.log_action(
+            request.user,
+            "INVENTORY_EXTRA",
+            "InventoryItem",
+            item.id,
+            f"Device {item.device.company_tag} marked extra",
+        )
+        return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
 
 
 # =========================
@@ -1119,6 +1185,40 @@ def _get_dashboard_url(role):
     return reverse(role_dashboard_map.get(role, "login"))
 
 
+def _employee_for_user(user):
+    return Employee.objects.select_related("branch", "department").filter(user=user).first()
+
+
+def _attach_repair_activity(repairs):
+    repair_list = list(repairs)
+    repair_ids = [repair.id for repair in repair_list]
+    logs = {
+        log.repair_request_id: log
+        for log in RepairLog.objects.select_related("technician", "repair_request").filter(
+            repair_request_id__in=repair_ids
+        )
+    }
+    log_ids = [log.id for log in logs.values()]
+    audit_logs = AuditLog.objects.select_related("user").filter(
+        Q(model_name="RepairRequest", object_id__in=repair_ids)
+        | Q(model_name="RepairLog", object_id__in=log_ids)
+    ).order_by("timestamp")
+
+    activity_by_repair = {repair_id: [] for repair_id in repair_ids}
+    log_to_repair = {log.id: repair_id for repair_id, log in logs.items()}
+    for audit in audit_logs:
+        repair_id = audit.object_id
+        if audit.model_name == "RepairLog":
+            repair_id = log_to_repair.get(audit.object_id)
+        if repair_id in activity_by_repair:
+            activity_by_repair[repair_id].append(audit)
+
+    for repair in repair_list:
+        repair.activity_logs = activity_by_repair.get(repair.id, [])
+        repair.repair_log = logs.get(repair.id)
+    return repair_list
+
+
 def home_view(request):
     """Root view: redirect to login if not authenticated, dashboard if authenticated."""
     if request.user.is_authenticated:
@@ -1146,9 +1246,19 @@ def login_view(request):
             login(request, user)
             return redirect(_get_dashboard_url(user.role))
 
+        inactive_user = User.objects.filter(
+            Q(username=username_or_email) | Q(email=username_or_email),
+            is_active=False,
+        ).first()
+        if inactive_user:
+            messages.error(request, "Your account is inactive. Please contact the administrator.")
+            return render(request, "Auth/login.html", {"username": username_or_email})
+
         messages.error(request, "Invalid username/email or password")
         return render(request, "Auth/login.html", {"username": username_or_email})
 
+    if request.GET.get("message"):
+        messages.error(request, request.GET["message"])
     return render(request, "Auth/login.html")
 
 
@@ -1247,7 +1357,19 @@ def head_office_dashboard(request):
 @login_required
 @role_required("BRANCH_MANAGER")
 def branch_manager_dashboard(request):
-    return render(request, "BranchManage/Dashboard.html")
+    employee = _employee_for_user(request.user)
+    branch = employee.branch if employee else None
+    devices = Device.objects.filter(assigned_branch=branch) if branch else Device.objects.none()
+    employees = Employee.objects.filter(branch=branch) if branch else Employee.objects.none()
+    context = {
+        "branch": branch,
+        "device_count": devices.count(),
+        "employee_count": employees.count(),
+        "missing_count": devices.filter(status="MISSING").count(),
+        "repair_count": devices.filter(status="IN_REPAIR").count(),
+        "sessions": InventorySession.objects.filter(branch=branch).order_by("-start_date")[:5] if branch else [],
+    }
+    return render(request, "BranchManage/Dashboard.html", context)
 
 
 @login_required
@@ -1330,26 +1452,27 @@ def technician_repair_history(request):
 
 
 @login_required
-@role_required("EMPLOYEE")
+@role_required("HEAD_OFFICE", "BRANCH_MANAGER", "TECHNICIAN", "EMPLOYEE")
 def employee_my_devices(request):
-    employee = Employee.objects.filter(user=request.user).first()
+    employee = _employee_for_user(request.user)
     devices = Device.objects.select_related("assigned_branch").filter(assigned_employee=employee) if employee else Device.objects.none()
     return render(request, "Employee/MyDevices.html", {"employee": employee, "devices": devices})
 
 
 @login_required
-@role_required("EMPLOYEE")
+@role_required("HEAD_OFFICE", "BRANCH_MANAGER", "TECHNICIAN", "EMPLOYEE")
 def employee_request_repair(request):
-    employee = Employee.objects.filter(user=request.user).first()
+    employee = _employee_for_user(request.user)
     devices = Device.objects.filter(assigned_employee=employee).exclude(status__in=["RETIRED", "MISSING"]) if employee else Device.objects.none()
     return render(request, "Employee/RequestRepair.html", {"employee": employee, "devices": devices})
 
 
 @login_required
-@role_required("EMPLOYEE")
+@role_required("HEAD_OFFICE", "BRANCH_MANAGER", "TECHNICIAN", "EMPLOYEE")
 def employee_repair_requests(request):
-    employee = Employee.objects.filter(user=request.user).first()
-    repairs = RepairRequest.objects.select_related("device", "approved_by").filter(employee=employee).order_by("-request_date") if employee else RepairRequest.objects.none()
+    employee = _employee_for_user(request.user)
+    repairs = RepairRequest.objects.select_related("device", "approved_by", "employee").filter(employee=employee).order_by("-request_date") if employee else RepairRequest.objects.none()
+    repairs = _attach_repair_activity(repairs) if employee else repairs
     return render(request, "Employee/RepairRequests.html", {"employee": employee, "repairs": repairs})
 
 
@@ -1434,7 +1557,7 @@ def head_office_assignments(request):
     returned_assignments = assignments.filter(returned_date__isnull=False)
     
     employees = Employee.objects.filter(status='ACTIVE')
-    available_devices = Device.objects.select_related('assigned_branch').filter(status='AVAILABLE')
+    available_devices = Device.objects.select_related('assigned_branch').filter(status__in=['AVAILABLE', 'REPAIRED', 'COMPLETED'])
     branches = Branch.objects.all()
     
     context = {
@@ -1455,13 +1578,14 @@ def head_office_repairs(request):
     repairs = RepairRequest.objects.select_related(
         'device', 'employee', 'approved_by'
     ).all().order_by('-request_date')
+    repairs = _attach_repair_activity(repairs)
     
     repairs_by_status = {
-        'PENDING': repairs.filter(status='PENDING'),
-        'APPROVED': repairs.filter(status='APPROVED'),
-        'REJECTED': repairs.filter(status='REJECTED'),
-        'IN_PROGRESS': repairs.filter(status='IN_PROGRESS'),
-        'COMPLETED': repairs.filter(status='COMPLETED'),
+        'PENDING': [repair for repair in repairs if repair.status == 'PENDING'],
+        'APPROVED': [repair for repair in repairs if repair.status == 'APPROVED'],
+        'REJECTED': [repair for repair in repairs if repair.status == 'REJECTED'],
+        'IN_PROGRESS': [repair for repair in repairs if repair.status == 'IN_PROGRESS'],
+        'COMPLETED': [repair for repair in repairs if repair.status == 'COMPLETED'],
     }
     
     context = {
@@ -1480,7 +1604,7 @@ def head_office_inventory(request):
     """Inventory management view."""
     inventory_sessions = InventorySession.objects.select_related(
         'branch', 'created_by'
-    ).all().order_by('-start_date')
+    ).prefetch_related('items', 'items__device', 'items__device__assigned_employee').all().order_by('-start_date')
     
     branches = Branch.objects.all()
     
@@ -1489,6 +1613,53 @@ def head_office_inventory(request):
         'branches': branches,
     }
     return render(request, "HeadOffice/Inventory.html", context)
+
+
+@login_required
+@role_required("BRANCH_MANAGER")
+def branch_devices(request):
+    employee = _employee_for_user(request.user)
+    branch = employee.branch if employee else None
+    devices = Device.objects.select_related("assigned_employee", "assigned_branch").filter(assigned_branch=branch) if branch else Device.objects.none()
+    return render(request, "BranchManage/BranchDevices.html", {"branch": branch, "devices": devices})
+
+
+@login_required
+@role_required("BRANCH_MANAGER")
+def branch_employees(request):
+    employee = _employee_for_user(request.user)
+    branch = employee.branch if employee else None
+    employees = Employee.objects.select_related("department", "user").prefetch_related("device_set").filter(branch=branch) if branch else Employee.objects.none()
+    return render(request, "BranchManage/BranchEmployees.html", {"branch": branch, "employees": employees})
+
+
+@login_required
+@role_required("BRANCH_MANAGER")
+def branch_inventory_verification(request):
+    employee = _employee_for_user(request.user)
+    branch = employee.branch if employee else None
+    sessions = InventorySession.objects.select_related("branch", "created_by").prefetch_related(
+        "items", "items__device", "items__device__assigned_employee"
+    ).filter(branch=branch).order_by("-start_date") if branch else InventorySession.objects.none()
+    return render(request, "BranchManage/InventoryVerification.html", {"branch": branch, "sessions": sessions})
+
+
+@login_required
+@role_required("BRANCH_MANAGER")
+def branch_reports(request):
+    employee = _employee_for_user(request.user)
+    branch = employee.branch if employee else None
+    devices = Device.objects.filter(assigned_branch=branch) if branch else Device.objects.none()
+    employees = Employee.objects.filter(branch=branch).prefetch_related("device_set") if branch else Employee.objects.none()
+    sessions = InventorySession.objects.filter(branch=branch).prefetch_related("items") if branch else InventorySession.objects.none()
+    context = {
+        "branch": branch,
+        "employees": employees,
+        "missing_devices": devices.filter(status="MISSING"),
+        "repair_devices": devices.filter(status="IN_REPAIR"),
+        "sessions": sessions.order_by("-start_date"),
+    }
+    return render(request, "BranchManage/Reports.html", context)
 
 
 @login_required

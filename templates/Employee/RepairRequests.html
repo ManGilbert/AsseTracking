@@ -20,14 +20,14 @@
     </div>
     <div class="card">
         <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
-            <h5 class="card-title mb-0">Repair Requests ({{ repairs.count }})</h5>
+            <h5 class="card-title mb-0">Repair Requests ({{ repairs|length }})</h5>
             <input type="search" class="form-control" style="max-width: 320px;" data-table-search="#repairRequestsTable" placeholder="Search requests...">
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0" id="repairRequestsTable">
                     <thead class="table-light">
-                        <tr><th>Device</th><th>Issue</th><th>Priority</th><th>Status</th><th>Requested</th><th>Approved By</th></tr>
+                        <tr><th>Device</th><th>Issue</th><th>Priority</th><th>Status</th><th>Requested</th><th>Approved By</th><th class="text-end">Details</th></tr>
                     </thead>
                     <tbody>
                         {% for repair in repairs %}
@@ -38,9 +38,14 @@
                             <td><span class="badge bg-light text-dark">{{ repair.status }}</span></td>
                             <td>{{ repair.request_date|date:"M d, Y H:i" }}</td>
                             <td>{{ repair.approved_by.username|default:"-" }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#employeeRepairHistory{{ repair.id }}">
+                                    <i class="feather-eye"></i>
+                                </button>
+                            </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="6" class="text-center text-muted py-4">No repair requests</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-4">No repair requests</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -48,4 +53,57 @@
         </div>
     </div>
 </div>
+
+{% for repair in repairs %}
+<div class="modal fade" id="employeeRepairHistory{{ repair.id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Repair Details - {{ repair.device.company_tag }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+                            <h6>Device</h6>
+                            <div>{{ repair.device.device_type }} - {{ repair.device.brand }} {{ repair.device.model }}</div>
+                            <div class="text-muted">Serial: {{ repair.device.serial_number }}</div>
+                            <div class="text-muted">Company tag: {{ repair.device.company_tag }}</div>
+                            <div class="text-muted">Status: {{ repair.device.status }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+                            <h6>Technician</h6>
+                            <div>{{ repair.repair_log.technician.username|default:"Not assigned" }}</div>
+                            <div class="text-muted">{{ repair.repair_log.technician.email|default:"-" }}</div>
+                            <div class="mt-2">Start: {{ repair.repair_log.start_date|date:"M d, Y H:i"|default:"-" }}</div>
+                            <div>End: {{ repair.repair_log.completed_date|date:"M d, Y H:i"|default:"-" }}</div>
+                        </div>
+                    </div>
+                </div>
+                <h6>Repair Notes</h6>
+                <p>{{ repair.repair_log.notes|default:repair.issue_description }}</p>
+                {% if repair.repair_log.parts_used %}<p class="text-muted">Actions/parts: {{ repair.repair_log.parts_used }}</p>{% endif %}
+                <h6>Activity History</h6>
+                <div class="list-group">
+                    {% for activity in repair.activity_logs %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between gap-3">
+                            <strong>{{ activity.action }}</strong>
+                            <span class="text-muted">{{ activity.timestamp|date:"M d, Y H:i" }}</span>
+                        </div>
+                        <div class="small text-muted">{{ activity.user.username|default:"System" }}{% if activity.user.email %} - {{ activity.user.email }}{% endif %}</div>
+                        <div>{{ activity.details }}</div>
+                    </div>
+                    {% empty %}
+                    <div class="list-group-item text-muted">No activity has been recorded yet.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
 {% endblock %}

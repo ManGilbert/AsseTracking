@@ -133,6 +133,7 @@ class Device(models.Model):
         ('ASSIGNED', 'Assigned'),
         ('PENDING_RETURN', 'Pending Return'),
         ('IN_REPAIR', 'In Repair'),
+        ('COMPLETED', 'Completed'),
         ('REPAIRED', 'Repaired'),
         ('MISSING', 'Missing'),
         ('RETIRED', 'Retired'),
@@ -283,6 +284,7 @@ class InventoryItem(models.Model):
     STATUS_CHOICES = [
         ('VERIFIED', 'Verified'),
         ('MISSING', 'Missing'),
+        ('EXTRA', 'Extra'),
     ]
 
     session = models.ForeignKey(InventorySession, on_delete=models.CASCADE, related_name='items')

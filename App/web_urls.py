@@ -13,6 +13,10 @@ from .views import (
     head_office_inventory,
     head_office_audit_logs,
     branch_manager_dashboard,
+    branch_devices,
+    branch_employees,
+    branch_inventory_verification,
+    branch_reports,
     employee_dashboard,
     employee_my_devices,
     employee_request_repair,
@@ -43,6 +47,10 @@ urlpatterns = [
     
     # Other Dashboards
     path("dashboard/branch/", branch_manager_dashboard, name="branch_manager_dashboard"),
+    path("branch/devices/", branch_devices, name="branch_devices"),
+    path("branch/employees/", branch_employees, name="branch_employees"),
+    path("branch/inventory/", branch_inventory_verification, name="branch_inventory_verification"),
+    path("branch/reports/", branch_reports, name="branch_reports"),
     path("dashboard/employee/", employee_dashboard, name="employee_dashboard"),
     path("employee/my-devices/", employee_my_devices, name="employee_my_devices"),
     path("employee/request-repair/", employee_request_repair, name="employee_request_repair"),

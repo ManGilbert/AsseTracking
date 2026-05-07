@@ -87,6 +87,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'App.middleware.InactiveUserAndSessionTimeoutMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -95,6 +96,8 @@ ROOT_URLCONF = 'AsseTracking.urls'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/login/'
+SESSION_COOKIE_AGE = 3600
+SESSION_INACTIVITY_TIMEOUT = 3600
 
 TEMPLATES = [
     {

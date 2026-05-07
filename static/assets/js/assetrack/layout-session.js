@@ -8,12 +8,15 @@ class AsseTrackSession {
         this.refreshToken = localStorage.getItem('assetrack_refresh_token');
         this.user = null;
         this.notifications = [];
+        this.inactivityLimitMs = 60 * 60 * 1000;
+        this.inactivityTimer = null;
         this.init();
     }
 
     init() {
         this.loadUserFromStorage();
         this.setupEventListeners();
+        this.setupInactivityTimeout();
         this.updateUI();
         this.startTokenRefreshTimer();
     }
@@ -47,6 +50,24 @@ class AsseTrackSession {
                 this.markNotificationsAsRead();
             });
         }
+    }
+
+    setupInactivityTimeout() {
+        const reset = () => {
+            clearTimeout(this.inactivityTimer);
+            this.inactivityTimer = setTimeout(() => {
+                sessionStorage.setItem(
+                    'assetrack_session_message',
+                    'Your session has expired due to inactivity. Please log in again.'
+                );
+                this.logout();
+            }, this.inactivityLimitMs);
+        };
+
+        ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'].forEach((eventName) => {
+            window.addEventListener(eventName, reset, { passive: true });
+        });
+        reset();
     }
 
     async authenticate(username, password) {
@@ -177,7 +198,9 @@ class AsseTrackSession {
         localStorage.removeItem('assetrack_session_expires_at');
 
         // Redirect to login
-        window.location.href = '/login/';
+        const message = sessionStorage.getItem('assetrack_session_message');
+        sessionStorage.removeItem('assetrack_session_message');
+        window.location.href = message ? `/login/?message=${encodeURIComponent(message)}` : '/login/';
     }
 
     updateUI() {

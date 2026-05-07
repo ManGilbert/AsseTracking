@@ -153,15 +153,15 @@ class CanUpdateRepair(permissions.BasePermission):
 
 
 class CanVerifyInventory(permissions.BasePermission):
-    """Allow BRANCH_MANAGER to verify inventory."""
+    """Allow Branch Managers and Head Office to verify inventory."""
 
-    message = "Only Branch Managers can verify inventory."
+    message = "Only Branch Managers or Head Office can verify inventory."
 
     def has_permission(self, request, view):
         return (
             request.user
             and request.user.is_authenticated
-            and request.user.role == "BRANCH_MANAGER"
+            and request.user.role in ["BRANCH_MANAGER", "HEAD_OFFICE"]
         )
 
 

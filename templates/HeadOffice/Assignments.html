@@ -188,8 +188,17 @@
             </div>
             <form id="assignDeviceForm" class="modal-body">
                 <div class="mb-3">
+                    <label class="form-label">Branch <span class="text-danger">*</span></label>
+                    <select class="form-select" id="assignmentBranchId" required>
+                        <option value="">Select Branch</option>
+                        {% for branch in branches %}
+                        <option value="{{ branch.id }}">{{ branch.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
                     <label class="form-label">Device <span class="text-danger">*</span></label>
-                    <select class="form-select" id="deviceId" required>
+                    <select class="form-select" id="deviceId" required disabled>
                         <option value="">Select Device</option>
                         {% for device in available_devices %}
                         <option value="{{ device.id }}" data-branch="{{ device.assigned_branch_id|default:'' }}">
@@ -200,7 +209,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Employee <span class="text-danger">*</span></label>
-                    <select class="form-select" id="employeeId" required>
+                    <select class="form-select" id="employeeId" required disabled>
                         <option value="">Select Employee</option>
                         {% for employee in employees %}
                         <option value="{{ employee.id }}" data-branch="{{ employee.branch_id|default:'' }}">{{ employee.full_name }} - {{ employee.branch.name }}</option>
@@ -249,8 +258,8 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    filterEmployeesForDevice();
-    document.getElementById('deviceId').addEventListener('change', filterEmployeesForDevice);
+    filterAssignmentOptions();
+    document.getElementById('assignmentBranchId').addEventListener('change', filterAssignmentOptions);
     const searchAssignments = document.getElementById('searchAssignments');
     const activeTab = document.getElementById('active-tab');
     const returnedTab = document.getElementById('returned-tab');
@@ -321,27 +330,42 @@ function loadAvailableDevices() {
                     select.innerHTML += `<option value="${device.id}" data-branch="${device.assigned_branch || ''}">${device.company_tag} - ${device.device_type}</option>`;
                 });
             }
-            filterEmployeesForDevice();
+            filterAssignmentOptions();
         });
 }
 
-function filterEmployeesForDevice() {
+function filterAssignmentOptions() {
+    const branchId = document.getElementById('assignmentBranchId').value;
     const deviceSelect = document.getElementById('deviceId');
     const employeeSelect = document.getElementById('employeeId');
-    const selectedDevice = deviceSelect.options[deviceSelect.selectedIndex];
-    const branchId = selectedDevice ? selectedDevice.dataset.branch : '';
+
+    deviceSelect.disabled = !branchId;
+    employeeSelect.disabled = !branchId;
 
     Array.from(employeeSelect.options).forEach(option => {
         if (!option.value) {
             option.hidden = false;
             return;
         }
-        option.hidden = branchId && option.dataset.branch !== branchId;
+        option.hidden = option.dataset.branch !== branchId;
+    });
+
+    Array.from(deviceSelect.options).forEach(option => {
+        if (!option.value) {
+            option.hidden = false;
+            return;
+        }
+        option.hidden = option.dataset.branch !== branchId;
     });
 
     const selectedEmployee = employeeSelect.options[employeeSelect.selectedIndex];
     if (selectedEmployee && selectedEmployee.hidden) {
         employeeSelect.value = '';
+    }
+
+    const selectedDevice = deviceSelect.options[deviceSelect.selectedIndex];
+    if (selectedDevice && selectedDevice.hidden) {
+        deviceSelect.value = '';
     }
 }
 

@@ -200,6 +200,7 @@
                         <select class="form-select" id="loginRole" required>
                             <option value="EMPLOYEE">Employee</option>
                             <option value="BRANCH_MANAGER">Branch Manager</option>
+                            <option value="TECHNICIAN">Technician</option>
                         </select>
                     </div>
                 </div>
@@ -287,6 +288,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('branchId').addEventListener('change', function() {
         loadDepartments(this.value, 'departmentId');
     });
+    document.getElementById('loginRole').addEventListener('change', updateRoleBranchRequirement);
+    updateRoleBranchRequirement();
     
     document.getElementById('editBranchId').addEventListener('change', function() {
         loadDepartments(this.value, 'editDepartmentId');
@@ -322,6 +325,20 @@ function loadDepartments(branchId, targetSelectId) {
         });
 }
 
+function updateRoleBranchRequirement() {
+    const role = document.getElementById('loginRole').value;
+    const branch = document.getElementById('branchId');
+    const department = document.getElementById('departmentId');
+    const isTechnician = role === 'TECHNICIAN';
+    branch.required = !isTechnician;
+    department.disabled = isTechnician;
+    if (isTechnician) {
+        branch.value = '';
+        department.value = '';
+        loadDepartments('', 'departmentId');
+    }
+}
+
 function loadEmployee(employeeId) {
     fetch(`/api/employees/${employeeId}/`)
         .then(response => response.json())
@@ -350,7 +367,7 @@ function submitEmployeeForm(employeeId) {
     const data = {
         full_name: document.getElementById(employeeId ? 'editFullName' : 'fullName').value,
         position: document.getElementById(employeeId ? 'editPosition' : 'position').value,
-        branch: parseInt(document.getElementById(employeeId ? 'editBranchId' : 'branchId').value),
+        branch: parseInt(document.getElementById(employeeId ? 'editBranchId' : 'branchId').value) || null,
         department: parseInt(document.getElementById(employeeId ? 'editDepartmentId' : 'departmentId').value) || null,
         hire_date: document.getElementById(employeeId ? 'editHireDate' : 'hireDate').value,
     };

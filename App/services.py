@@ -380,8 +380,22 @@ class RepairService:
             repair_request.status = "COMPLETED"
             repair_request.save()
 
-            # Mark device repaired; Head Office can return it to assignment flow.
-            device.status = "REPAIRED"
+            active_assignment = DeviceAssignment.objects.filter(
+                device=device,
+                returned_date__isnull=True,
+            ).first()
+            if active_assignment:
+                active_assignment.returned_date = timezone.now()
+                active_assignment.received_by = technician_user
+                active_assignment.condition_on_return = notes
+                active_assignment.save()
+
+            # Mark device completed and returned to Head Office for reassignment.
+            device.status = "COMPLETED"
+            device.assigned_employee = None
+            device.assigned_branch = None
+            device.location_type = "HEAD_OFFICE"
+            device.current_location = "Head Office"
             device.save()
 
             # Create audit log
@@ -407,7 +421,7 @@ class InventoryService:
     """
 
     @staticmethod
-    def create_inventory_session(branch_id, created_by_user):
+    def create_inventory_session(branch_id, created_by_user, start_date=None, end_date=None):
         """
         Create inventory session for branch.
 
@@ -425,7 +439,8 @@ class InventoryService:
         with transaction.atomic():
             session = InventorySession.objects.create(
                 branch=branch,
-                start_date=timezone.now(),
+                start_date=start_date or timezone.now(),
+                end_date=end_date,
                 created_by=created_by_user,
             )
 

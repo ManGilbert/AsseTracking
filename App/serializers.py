@@ -108,7 +108,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
     login_email = serializers.EmailField(write_only=True, required=False, allow_blank=False)
     login_role = serializers.ChoiceField(
         write_only=True,
-        choices=(("EMPLOYEE", "Employee"), ("BRANCH_MANAGER", "Branch Manager")),
+        choices=(
+            ("EMPLOYEE", "Employee"),
+            ("BRANCH_MANAGER", "Branch Manager"),
+            ("TECHNICIAN", "Technician"),
+        ),
         required=False,
         default="EMPLOYEE",
     )
@@ -155,7 +159,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
             if errors:
                 raise serializers.ValidationError(errors)
 
+        login_role = attrs.get("login_role", "EMPLOYEE")
         branch = attrs.get("branch") or getattr(self.instance, "branch", None)
+        if login_role != "TECHNICIAN" and self.instance is None and not branch:
+            raise serializers.ValidationError({"branch": "Branch is required."})
+
         department = attrs.get("department")
         if department and branch and department.branch_id != branch.id:
             raise serializers.ValidationError(

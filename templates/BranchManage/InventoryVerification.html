@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventory Verification{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h1 class="h3 mb-0"><i class="feather-check-square me-2"></i>Inventory Verification</h1>
+        <p class="text-muted mb-0">{{ branch.name|default:"No branch assigned" }}</p>
+    </div>
+    {% for session in sessions %}
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="card-title mb-0">{{ session.branch.name }} Inventory</h5>
+                <div class="text-muted small">{{ session.start_date|date:"M d, Y H:i" }} - {{ session.end_date|date:"M d, Y H:i"|default:"In progress" }}</div>
+            </div>
+            {% if not session.approved_by_branch %}
+            <button class="btn btn-sm btn-success" onclick="approveBranchInventory({{ session.id }})">
+                <i class="feather-check me-1"></i>Approve Branch Inventory
+            </button>
+            {% else %}
+            <span class="badge bg-success">Approved by Branch</span>
+            {% endif %}
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>Check</th><th>Device</th><th>Tag</th><th>Assigned Employee</th><th>Status</th><th>Comment</th><th class="text-end">Mark</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for item in session.items.all %}
+                        <tr>
+                            <td><input type="checkbox" class="form-check-input" {% if item.status == 'VERIFIED' %}checked{% endif %} disabled></td>
+                            <td>{{ item.device.device_type }} - {{ item.device.brand }} {{ item.device.model }}</td>
+                            <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
+                            <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
+                            <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
+                            <td>{{ item.comment|default:"-" }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-success" onclick="markInventoryItem({{ item.id }}, 'mark_verified')">Verified</button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_missing')">Missing</button>
+                                <button class="btn btn-sm btn-outline-info" onclick="markInventoryItem({{ item.id }}, 'mark_extra')">Extra</button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-4">No inventory items.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-info">No inventory sessions are available for your branch.</div>
+    {% endfor %}
+</div>
+<script>
+function markInventoryItem(itemId, action) {
+    const comment = prompt('Comment (damaged, wrong location, not found, or other update):', '');
+    if (comment === null) return;
+    fetch(`/api/inventory-items/${itemId}/${action}/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({comment})
+    }).then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error updating inventory item')));
+    });
+}
+function approveBranchInventory(sessionId) {
+    if (!confirm('Approve this branch inventory?')) return;
+    fetch(`/api/inventory-sessions/${sessionId}/approve_branch/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => {
+        if (response.ok) location.reload();
+        else response.json().then(e => alert(getApiError(e, 'Error approving branch inventory')));
+    });
+}
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
+}
+</script>
+{% endblock %}
