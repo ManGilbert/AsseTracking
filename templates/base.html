@@ -66,6 +66,18 @@
                                     <li class="nxl-item"><a class="nxl-link" href="#">Reports</a></li>
                                 </ul>
                             </li>
+
+                            <li class="nxl-item nxl-hasmenu">
+                                <a href="javascript:void(0);" class="nxl-link">
+                                    <span class="nxl-micon"><i class="feather-user"></i></span>
+                                    <span class="nxl-mtext">Employee</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
+                                </a>
+                                <ul class="nxl-submenu">
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_my_devices' %}">My Devices</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_request_repair' %}">Request Repair</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_repair_requests' %}">Repair Requests</a></li>
+                                </ul>
+                            </li>
                         {% endif %}
                         {% if request.user.role == 'BRANCH_MANAGER' %}
                             <li class="nxl-item nxl-hasmenu">
@@ -74,9 +86,23 @@
                                     <span class="nxl-mtext">Branch Manager</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
                                 </a>
                                 <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="">Inventory</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Assignments</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="">Branch Devices</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="#">Branch Employees</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="#">Inventory Verification</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="#">Reports</a></li>
+                                </ul>
+
+                            </li>
+
+                            <li class="nxl-item nxl-hasmenu">
+                                <a href="javascript:void(0);" class="nxl-link">
+                                    <span class="nxl-micon"><i class="feather-user"></i></span>
+                                    <span class="nxl-mtext">Employee</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
+                                </a>
+                                <ul class="nxl-submenu">
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_my_devices' %}">My Devices</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_request_repair' %}">Request Repair</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_repair_requests' %}">Repair Requests</a></li>
                                 </ul>
                             </li>
                         {% endif %}
@@ -105,6 +131,19 @@
                                     <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_completed_repairs' %}">Completed Repairs</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_device_lookup' %}">Device Lookup</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_repair_history' %}">Repair History</a></li>
+                                </ul>
+                            </li>
+
+
+                            <li class="nxl-item nxl-hasmenu">
+                                <a href="javascript:void(0);" class="nxl-link">
+                                    <span class="nxl-micon"><i class="feather-user"></i></span>
+                                    <span class="nxl-mtext">Employee</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
+                                </a>
+                                <ul class="nxl-submenu">
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_my_devices' %}">My Devices</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_request_repair' %}">Request Repair</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_repair_requests' %}">Repair Requests</a></li>
                                 </ul>
                             </li>
                         {% endif %}
