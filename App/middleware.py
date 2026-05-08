@@ -19,7 +19,7 @@ class InactiveUserAndSessionTimeoutMiddleware:
                 logout(request)
                 messages.error(
                     request,
-                    "Your account is inactive. Please contact the administrator.",
+                    "Your account has been deactivated. Please contact the administrator.",
                 )
                 return redirect(settings.LOGIN_URL)
 

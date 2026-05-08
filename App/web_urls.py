@@ -11,6 +11,8 @@ from .views import (
     head_office_assignments,
     head_office_repairs,
     head_office_inventory,
+    head_office_inventory_detail,
+    head_office_reports,
     head_office_audit_logs,
     branch_manager_dashboard,
     branch_devices,
@@ -43,6 +45,8 @@ urlpatterns = [
     path("head-office/assignments/", head_office_assignments, name="head_office_assignments"),
     path("head-office/repairs/", head_office_repairs, name="head_office_repairs"),
     path("head-office/inventory/", head_office_inventory, name="head_office_inventory"),
+    path("head-office/inventory/<int:session_id>/", head_office_inventory_detail, name="head_office_inventory_detail"),
+    path("head-office/reports/", head_office_reports, name="head_office_reports"),
     path("head-office/audit-logs/", head_office_audit_logs, name="head_office_audit_logs"),
     
     # Other Dashboards

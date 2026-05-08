@@ -15,6 +15,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -78,6 +79,18 @@ from .services import (
     EmployeeExitService,
     AuditService,
 )
+
+
+DEACTIVATED_ACCOUNT_MESSAGE = "Your account has been deactivated. Please contact the administrator."
+
+
+def _sync_employee_user_active_state(employee):
+    if not employee.user:
+        return
+    should_be_active = employee.status == "ACTIVE"
+    if employee.user.is_active != should_be_active:
+        employee.user.is_active = should_be_active
+        employee.user.save(update_fields=["is_active"])
 
 
 # =========================
@@ -277,6 +290,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         employee = serializer.save()
+        _sync_employee_user_active_state(employee)
         AuditService.log_action(
             self.request.user,
             "EMPLOYEE_CREATED",
@@ -287,6 +301,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         employee = serializer.save()
+        _sync_employee_user_active_state(employee)
         AuditService.log_action(
             self.request.user,
             "EMPLOYEE_UPDATED",
@@ -329,6 +344,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         employee.status = "EXITED"
         employee.exit_date = exit_date
         employee.save()
+        _sync_employee_user_active_state(employee)
 
         # Handle employee exit
         affected_devices = EmployeeExitService.handle_employee_exit(
@@ -780,10 +796,9 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
 
         condition = request.data.get("condition_on_issue", "Reassigned after completed repair")
         try:
-            assignment = DeviceAssignmentService.assign_device(
-                device_id=repair_request.device_id,
-                employee_id=repair_request.employee_id,
-                assigned_by_user=request.user,
+            assignment = RepairService.reassign_completed_repair(
+                repair_request_id=repair_request.id,
+                reassigned_by_user=request.user,
                 condition=condition,
             )
             return Response(
@@ -1251,7 +1266,7 @@ def login_view(request):
             is_active=False,
         ).first()
         if inactive_user:
-            messages.error(request, "Your account is inactive. Please contact the administrator.")
+            messages.error(request, DEACTIVATED_ACCOUNT_MESSAGE)
             return render(request, "Auth/login.html", {"username": username_or_email})
 
         messages.error(request, "Invalid username/email or password")
@@ -1361,12 +1376,29 @@ def branch_manager_dashboard(request):
     branch = employee.branch if employee else None
     devices = Device.objects.filter(assigned_branch=branch) if branch else Device.objects.none()
     employees = Employee.objects.filter(branch=branch) if branch else Employee.objects.none()
+    repairs = RepairRequest.objects.select_related("device", "employee").filter(
+        device__assigned_branch=branch
+    ) if branch else RepairRequest.objects.none()
+    recent_audits = AuditLog.objects.select_related("user").filter(
+        Q(model_name="Device", object_id__in=devices.values("id"))
+        | Q(model_name="RepairRequest", object_id__in=repairs.values("id"))
+        | Q(details__icontains=branch.name if branch else "")
+    ).order_by("-timestamp")[:8] if branch else AuditLog.objects.none()
+    status_data = list(devices.values("status").annotate(count=Count("id")).order_by("status"))
+    repair_data = list(repairs.values("status").annotate(count=Count("id")).order_by("status"))
     context = {
         "branch": branch,
-        "device_count": devices.count(),
+        "total_devices": devices.count(),
+        "assigned_devices": devices.filter(status="ASSIGNED").count(),
+        "under_repair_devices": devices.filter(status="IN_REPAIR").count(),
+        "completed_repairs": repairs.filter(status="COMPLETED").count(),
         "employee_count": employees.count(),
         "missing_count": devices.filter(status="MISSING").count(),
         "repair_count": devices.filter(status="IN_REPAIR").count(),
+        "recent_audits": recent_audits,
+        "recent_repairs": repairs.order_by("-request_date")[:5],
+        "device_status_data": status_data,
+        "repair_status_data": repair_data,
         "sessions": InventorySession.objects.filter(branch=branch).order_by("-start_date")[:5] if branch else [],
     }
     return render(request, "BranchManage/Dashboard.html", context)
@@ -1557,7 +1589,10 @@ def head_office_assignments(request):
     returned_assignments = assignments.filter(returned_date__isnull=False)
     
     employees = Employee.objects.filter(status='ACTIVE')
-    available_devices = Device.objects.select_related('assigned_branch').filter(status__in=['AVAILABLE', 'REPAIRED', 'COMPLETED'])
+    available_devices = Device.objects.select_related('assigned_branch').filter(
+        Q(status='AVAILABLE')
+        | Q(status__in=['REPAIRED', 'COMPLETED'], assigned_employee__isnull=True)
+    )
     branches = Branch.objects.all()
     
     context = {
@@ -1616,6 +1651,28 @@ def head_office_inventory(request):
 
 
 @login_required
+@role_required("HEAD_OFFICE")
+def head_office_inventory_detail(request, session_id):
+    """Dedicated inventory session details page."""
+    session = InventorySession.objects.select_related("branch", "created_by").prefetch_related(
+        "items",
+        "items__device",
+        "items__device__assigned_employee",
+        "items__device__assigned_branch",
+    ).get(id=session_id)
+    items = session.items.select_related(
+        "device", "device__assigned_employee", "device__assigned_branch"
+    ).all().order_by("device__company_tag")
+    status_counts = items.values("status").annotate(count=Count("id")).order_by("status")
+    context = {
+        "session": session,
+        "items": items,
+        "status_counts": status_counts,
+    }
+    return render(request, "HeadOffice/InventoryDetail.html", context)
+
+
+@login_required
 @role_required("BRANCH_MANAGER")
 def branch_devices(request):
     employee = _employee_for_user(request.user)
@@ -1660,6 +1717,119 @@ def branch_reports(request):
         "sessions": sessions.order_by("-start_date"),
     }
     return render(request, "BranchManage/Reports.html", context)
+
+
+def _apply_common_report_filters(request, employees, repairs, devices, audit_logs):
+    branch_id = request.GET.get("branch")
+    employee_id = request.GET.get("employee")
+    selected_status = request.GET.get("status")
+    date_from = request.GET.get("date_from")
+    date_to = request.GET.get("date_to")
+
+    if branch_id:
+        employees = employees.filter(branch_id=branch_id)
+        repairs = repairs.filter(Q(employee__branch_id=branch_id) | Q(device__assigned_branch_id=branch_id))
+        devices = devices.filter(assigned_branch_id=branch_id)
+    if employee_id:
+        employees = employees.filter(id=employee_id)
+        repairs = repairs.filter(employee_id=employee_id)
+        devices = devices.filter(assigned_employee_id=employee_id)
+    if selected_status:
+        employees = employees.filter(status=selected_status) if selected_status in ["ACTIVE", "INACTIVE", "EXITED"] else employees
+        repairs = repairs.filter(status=selected_status) if selected_status in dict(RepairRequest.STATUS_CHOICES) else repairs
+        devices = devices.filter(status=selected_status) if selected_status in dict(Device.STATUS_CHOICES) else devices
+        audit_logs = audit_logs.filter(action=selected_status) if selected_status.startswith("AUDIT:") else audit_logs
+    if date_from:
+        employees = employees.filter(hire_date__gte=date_from)
+        repairs = repairs.filter(request_date__date__gte=date_from)
+        audit_logs = audit_logs.filter(timestamp__date__gte=date_from)
+    if date_to:
+        employees = employees.filter(hire_date__lte=date_to)
+        repairs = repairs.filter(request_date__date__lte=date_to)
+        audit_logs = audit_logs.filter(timestamp__date__lte=date_to)
+
+    return employees, repairs, devices, audit_logs
+
+
+def _report_export_response(export_type, context):
+    lines = [
+        "Report,Metric,Value",
+        f"Employees,Active,{context['active_employees']}",
+        f"Employees,Inactive,{context['inactive_employees']}",
+        f"Employees,Device Assignments,{context['device_assignments']}",
+        f"Repairs,Pending,{context['pending_repairs']}",
+        f"Repairs,Assigned,{context['assigned_repairs']}",
+        f"Repairs,Completed,{context['completed_repairs']}",
+        f"Inventory,Available,{context['available_inventory']}",
+        f"Inventory,Assigned,{context['assigned_inventory']}",
+        f"Inventory,Damaged,{context['damaged_inventory']}",
+    ]
+    content = "\n".join(lines)
+    if export_type == "excel":
+        response = HttpResponse(content, content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="head-office-report.csv"'
+        return response
+    if export_type == "pdf":
+        response = HttpResponse(content, content_type="text/plain")
+        response["Content-Disposition"] = 'attachment; filename="head-office-report.pdf"'
+        return response
+    return None
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_reports(request):
+    """Head Office reports with filters, summaries, and exports."""
+    employees = Employee.objects.select_related("branch", "department", "user").all()
+    repairs = RepairRequest.objects.select_related(
+        "device", "device__assigned_branch", "employee", "employee__branch", "repairlog", "repairlog__technician"
+    ).all()
+    devices = Device.objects.select_related("assigned_employee", "assigned_branch").all()
+    audit_logs = AuditLog.objects.select_related("user").all()
+
+    employees, repairs, devices, audit_logs = _apply_common_report_filters(
+        request, employees, repairs, devices, audit_logs
+    )
+
+    technician_performance = (
+        RepairLog.objects.select_related("technician")
+        .filter(repair_request__in=repairs)
+        .values("technician__username")
+        .annotate(completed=Count("id"))
+        .order_by("-completed")
+    )
+    branch_stats = (
+        devices.values("assigned_branch__name")
+        .annotate(total=Count("id"), repairs=Count("repairrequest", filter=Q(repairrequest__status__in=["APPROVED", "IN_PROGRESS", "COMPLETED"])))
+        .order_by("assigned_branch__name")
+    )
+    context = {
+        "branches": Branch.objects.all().order_by("name"),
+        "employees_filter": Employee.objects.all().order_by("full_name"),
+        "selected": request.GET,
+        "employee_rows": employees.order_by("full_name")[:100],
+        "repair_rows": repairs.order_by("-request_date")[:100],
+        "inventory_rows": devices.order_by("company_tag")[:100],
+        "audit_rows": audit_logs.order_by("-timestamp")[:100],
+        "technician_performance": technician_performance,
+        "branch_stats": branch_stats,
+        "active_employees": employees.filter(status="ACTIVE").count(),
+        "inactive_employees": employees.filter(status="INACTIVE").count(),
+        "device_assignments": DeviceAssignment.objects.filter(employee__in=employees, returned_date__isnull=True).count(),
+        "pending_repairs": repairs.filter(status="PENDING").count(),
+        "assigned_repairs": repairs.filter(status__in=["APPROVED", "IN_PROGRESS"]).count(),
+        "completed_repairs": repairs.filter(status="COMPLETED").count(),
+        "available_inventory": devices.filter(status="AVAILABLE").count(),
+        "assigned_inventory": devices.filter(status="ASSIGNED").count(),
+        "damaged_inventory": devices.filter(Q(status="IN_REPAIR") | Q(condition_notes__icontains="damaged")).count(),
+        "branch_activity": audit_logs.filter(model_name__in=["Branch", "InventorySession", "Device"])[:50],
+        "status_choices": list(Employee.STATUS_CHOICES) + list(RepairRequest.STATUS_CHOICES) + list(Device.STATUS_CHOICES),
+    }
+
+    export_response = _report_export_response(request.GET.get("export"), context)
+    if export_response:
+        return export_response
+    return render(request, "HeadOffice/Reports.html", context)
 
 
 @login_required

@@ -216,9 +216,6 @@
                                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}">
                                                 <i class="feather-eye"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-success" onclick="reassignCompletedRepair({{ repair.id }})">
-                                                <i class="feather-repeat me-1"></i>Reassign
-                                            </button>
                                             <button class="btn btn-sm btn-outline-danger" onclick="deleteRepair({{ repair.id }})">
                                                 <i class="feather-trash-2"></i>
                                             </button>
@@ -260,9 +257,17 @@
                                     <td>{{ repair.issue_description|truncatechars:50 }}</td>
                                     <td>{{ repair.request_date|date:"M d, H:i" }}</td>
                                     <td class="text-end">
-                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteRepair({{ repair.id }})">
-                                            <i class="feather-trash-2"></i>
-                                        </button>
+                                        <div class="hstack gap-1 justify-content-end">
+                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}" title="View details">
+                                                <i class="feather-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-success" onclick="reassignCompletedRepair({{ repair.id }})">
+                                                <i class="feather-repeat me-1"></i>Reassign
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteRepair({{ repair.id }})">
+                                                <i class="feather-trash-2"></i>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% empty %}
@@ -291,20 +296,59 @@
                 <div class="row g-3 mb-3">
                     <div class="col-md-6">
                         <div class="border rounded p-3 h-100">
-                            <h6>Device Details</h6>
+                            <h6>Device Information</h6>
                             <div>{{ repair.device.device_type }} - {{ repair.device.brand }} {{ repair.device.model }}</div>
                             <div class="text-muted">Serial: {{ repair.device.serial_number }}</div>
-                            <div class="text-muted">Location: {{ repair.device.current_location }}</div>
-                            <div class="mt-2">Progress: <span class="badge bg-light text-dark">{{ repair.status }}</span></div>
+                            <div class="text-muted">Asset code: {{ repair.device.company_tag }}</div>
+                            <div class="text-muted">Category: {{ repair.device.device_type }}</div>
+                            <div class="mt-2">Device status: <span class="badge bg-light text-dark">{{ repair.device.status }}</span></div>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="border rounded p-3 h-100">
-                            <h6>Technician</h6>
+                            <h6>Employee Information</h6>
+                            <div>
+                                {% if repair.employee %}
+                                    {{ repair.employee.full_name }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </div>
+
+                            <div class="text-muted">
+                                Employee ID:
+                                {% if repair.employee %}
+                                    {{ repair.employee.id }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </div>
+
+                            <div class="text-muted">
+                                Department:
+                                {% if repair.employee and repair.employee.department %}
+                                    {{ repair.employee.department.name }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+                            <h6>Repair Information</h6>
+                            <div>Problem: {{ repair.issue_description }}</div>
+                            <div class="text-muted mt-2">Status: {{ repair.status }}</div>
+                            <div class="text-muted">Start: {{ repair.repair_log.start_date|date:"M d, Y H:i"|default:"-" }}</div>
+                            <div class="text-muted">Completion: {{ repair.repair_log.completed_date|date:"M d, Y H:i"|default:"-" }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+                            <h6>Technician Information</h6>
                             <div>{{ repair.repair_log.technician.username|default:"Not assigned" }}</div>
                             <div class="text-muted">{{ repair.repair_log.technician.email|default:"-" }}</div>
-                            <div class="mt-2">Start: {{ repair.repair_log.start_date|date:"M d, Y H:i"|default:"-" }}</div>
-                            <div>End: {{ repair.repair_log.completed_date|date:"M d, Y H:i"|default:"-" }}</div>
+                            <div class="mt-2">Notes: {{ repair.repair_log.notes|default:"-" }}</div>
                         </div>
                     </div>
                 </div>
@@ -326,6 +370,14 @@
                     {% endfor %}
                 </div>
             </div>
+            {% if repair.status == 'COMPLETED' %}
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-success" onclick="reassignCompletedRepair({{ repair.id }})">
+                    <i class="feather-repeat me-1"></i>Reassign Repair
+                </button>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

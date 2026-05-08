@@ -71,9 +71,9 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
-                                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#inventorySession{{ session.id }}">
+                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'head_office_inventory_detail' session.id %}">
                                             <i class="feather-eye me-1"></i>View
-                                        </button>
+                                        </a>
                                         {% if not session.approved_by_head_office %}
                                         <button class="btn btn-sm btn-outline-success" onclick="approveInventorySession({{ session.id }})">
                                             <i class="feather-check me-1"></i>Approve

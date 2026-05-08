@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Inventory Details - Head Office{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="feather-inbox me-2"></i>{{ session.branch.name }} Inventory</h1>
+                    <p class="text-muted mb-0">Created by {{ session.created_by.username|default:"System" }} on {{ session.start_date|date:"M d, Y H:i" }}</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'head_office_inventory' %}" class="btn btn-outline-secondary">
+                        <i class="feather-arrow-left me-1"></i>Back
+                    </a>
+                    {% if not session.approved_by_head_office %}
+                    <button class="btn btn-success" onclick="approveInventorySession({{ session.id }})">
+                        <i class="feather-check me-1"></i>Approve
+                    </button>
+                    {% endif %}
+                    {% if not session.end_date %}
+                    <button class="btn btn-outline-secondary" onclick="closeInventorySession({{ session.id }})">
+                        <i class="feather-lock me-1"></i>Close
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3 mb-2">
+            <div class="card h-100"><div class="card-body"><h6 class="text-muted">Items</h6><h2 class="mb-0">{{ items.count }}</h2></div></div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100"><div class="card-body"><h6 class="text-muted">Branch Approval</h6><span class="badge {% if session.approved_by_branch %}bg-success{% else %}bg-warning{% endif %}">{{ session.approved_by_branch|yesno:"Approved,Pending" }}</span></div></div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100"><div class="card-body"><h6 class="text-muted">Head Office Approval</h6><span class="badge {% if session.approved_by_head_office %}bg-success{% else %}bg-warning{% endif %}">{{ session.approved_by_head_office|yesno:"Approved,Pending" }}</span></div></div>
+        </div>
+        <div class="col-md-3 mb-2">
+            <div class="card h-100"><div class="card-body"><h6 class="text-muted">End Date</h6><div>{{ session.end_date|date:"M d, Y H:i"|default:"In progress" }}</div></div></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+                <h5 class="card-title mb-0">Inventory Items</h5>
+                <div class="input-group" style="max-width: 360px;">
+                    <span class="input-group-text"><i class="feather-search"></i></span>
+                    <input type="search" class="form-control" id="searchInventoryItems" data-table-search="#inventoryItemsTable" placeholder="Search devices...">
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="inventoryItemsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Device</th>
+                            <th>Asset Code</th>
+                            <th>Serial</th>
+                            <th>Assigned Employee</th>
+                            <th>Branch</th>
+                            <th>Status</th>
+                            <th>Comment</th>
+                            <th class="text-end">Mark</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for item in items %}
+                        <tr>
+                            <td>{{ item.device.device_type }} - {{ item.device.brand }} {{ item.device.model }}</td>
+                            <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
+                            <td>{{ item.device.serial_number }}</td>
+                            <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
+                            <td>{{ item.device.assigned_branch.name|default:session.branch.name }}</td>
+                            <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
+                            <td>{{ item.comment|default:"-" }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-success" onclick="markInventoryItem({{ item.id }}, 'mark_verified')">Verified</button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_missing')">Missing</button>
+                                <button class="btn btn-sm btn-outline-info" onclick="markInventoryItem({{ item.id }}, 'mark_extra')">Extra</button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="8" class="text-center text-muted py-4">No inventory items.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function approveInventorySession(sessionId) {
+    if (!confirm('Approve this inventory session for Head Office?')) return;
+    fetch(`/api/inventory-sessions/${sessionId}/approve_head_office/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
+        .then(response => response.ok ? location.reload() : response.json().then(e => alert(getApiError(e, 'Error approving inventory session'))));
+}
+
+function closeInventorySession(sessionId) {
+    if (!confirm('Close this inventory session?')) return;
+    fetch(`/api/inventory-sessions/${sessionId}/close/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
+        .then(response => response.ok ? location.reload() : response.json().then(e => alert(getApiError(e, 'Error closing inventory session'))));
+}
+
+function markInventoryItem(itemId, action) {
+    const comment = prompt('Comment (damaged, wrong location, not found, or other update):', '');
+    if (comment === null) return;
+    fetch(`/api/inventory-items/${itemId}/${action}/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({comment})
+    }).then(response => response.ok ? location.reload() : response.json().then(e => alert(getApiError(e, 'Error updating inventory item'))));
+}
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+function getApiError(error, fallback) {
+    if (!error) return fallback;
+    if (error.error) return error.error;
+    if (error.detail) return error.detail;
+    return JSON.stringify(error);
+}
+</script>
+{% endblock %}

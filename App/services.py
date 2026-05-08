@@ -171,7 +171,7 @@ class RepairService:
     - Only HEAD_OFFICE can approve repairs
     - Only TECHNICIAN can complete repairs
     - Device moves to IN_REPAIR on approval
-    - Device returns to ASSIGNED on completion
+    - Device keeps its employee and branch assignment on completion
     """
 
     @staticmethod
@@ -380,22 +380,31 @@ class RepairService:
             repair_request.status = "COMPLETED"
             repair_request.save()
 
+            assigned_employee = device.assigned_employee or repair_request.employee
+            assigned_branch = device.assigned_branch or repair_request.employee.branch
+
             active_assignment = DeviceAssignment.objects.filter(
                 device=device,
                 returned_date__isnull=True,
             ).first()
-            if active_assignment:
-                active_assignment.returned_date = timezone.now()
-                active_assignment.received_by = technician_user
-                active_assignment.condition_on_return = notes
-                active_assignment.save()
+            if not active_assignment and assigned_employee:
+                DeviceAssignment.objects.create(
+                    device=device,
+                    employee=assigned_employee,
+                    branch=assigned_branch,
+                    assigned_by=technician_user,
+                    condition_on_issue="Assignment preserved after repair completion",
+                )
 
-            # Mark device completed and returned to Head Office for reassignment.
+            # Mark repair as completed without removing ownership or branch data.
             device.status = "COMPLETED"
-            device.assigned_employee = None
-            device.assigned_branch = None
-            device.location_type = "HEAD_OFFICE"
-            device.current_location = "Head Office"
+            device.assigned_employee = assigned_employee
+            device.assigned_branch = assigned_branch
+            device.location_type = "EMPLOYEE"
+            if assigned_employee and assigned_branch:
+                device.current_location = f"{assigned_branch.name} - {assigned_employee.full_name}"
+            elif assigned_branch:
+                device.current_location = assigned_branch.name
             device.save()
 
             # Create audit log
@@ -408,6 +417,59 @@ class RepairService:
             )
 
             return repair_log
+
+    @staticmethod
+    def reassign_completed_repair(repair_request_id, reassigned_by_user, condition=None):
+        """Move a completed repaired device back to active assigned status."""
+        repair_request = RepairRequest.objects.select_related(
+            "device", "employee", "employee__branch"
+        ).get(id=repair_request_id)
+        device = repair_request.device
+        employee = device.assigned_employee or repair_request.employee
+        branch = device.assigned_branch or employee.branch
+
+        if repair_request.status != "COMPLETED":
+            raise ValueError("Only completed repairs can be reassigned.")
+        if not employee:
+            raise ValueError("Repair has no employee assignment to restore.")
+        if employee.status != "ACTIVE":
+            raise ValueError("Device can only be reassigned to an active employee.")
+
+        with transaction.atomic():
+            assignment = DeviceAssignment.objects.filter(
+                device=device,
+                returned_date__isnull=True,
+            ).first()
+            if assignment:
+                assignment.employee = employee
+                assignment.branch = branch
+                assignment.condition_on_issue = condition or assignment.condition_on_issue
+                assignment.save(update_fields=["employee", "branch", "condition_on_issue"])
+            else:
+                assignment = DeviceAssignment.objects.create(
+                    device=device,
+                    employee=employee,
+                    branch=branch,
+                    assigned_by=reassigned_by_user,
+                    condition_on_issue=condition or "Reassigned after completed repair",
+                )
+
+            device.status = "ASSIGNED"
+            device.assigned_employee = employee
+            device.assigned_branch = branch
+            device.location_type = "EMPLOYEE"
+            device.current_location = f"{branch.name} - {employee.full_name}" if branch else employee.full_name
+            device.save()
+
+            AuditLog.objects.create(
+                user=reassigned_by_user,
+                action="REPAIR_REASSIGNED",
+                model_name="RepairRequest",
+                object_id=repair_request.id,
+                details=f"Completed repair reassigned to {employee.full_name}",
+            )
+
+            return assignment
 
 
 class InventoryService:

@@ -77,6 +77,31 @@ class HeadOfficeWorkflowApiTests(TestCase):
         self.assertEqual(employee.user.role, "BRANCH_MANAGER")
         self.assertEqual(self.branch.manager, employee)
 
+    def test_employee_inactivation_deactivates_login_user(self):
+        employee_user = User.objects.create_user(
+            username="employee.inactive",
+            email="employee.inactive@example.com",
+            password="Password123!",
+            role="EMPLOYEE",
+        )
+        employee = Employee.objects.create(
+            user=employee_user,
+            full_name="Employee Inactive",
+            position="Clerk",
+            branch=self.branch,
+            hire_date="2026-05-06",
+        )
+
+        response = self.client.patch(
+            f"/api/employees/{employee.id}/",
+            {"status": "INACTIVE"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        employee_user.refresh_from_db()
+        self.assertFalse(employee_user.is_active)
+
     def test_assignment_requires_device_and_employee_same_branch(self):
         other_branch = Branch.objects.create(name="Other Branch", location="Other")
         employee_user = User.objects.create_user(
@@ -258,6 +283,12 @@ class HeadOfficeWorkflowApiTests(TestCase):
             location_type="EMPLOYEE",
             current_location="Main Branch - Employee Tech Flow",
         )
+        DeviceAssignment.objects.create(
+            device=device,
+            employee=employee,
+            branch=self.branch,
+            assigned_by=self.head_office,
+        )
         repair = RepairRequest.objects.create(
             device=device,
             employee=employee,
@@ -301,6 +332,29 @@ class HeadOfficeWorkflowApiTests(TestCase):
         device.refresh_from_db()
         self.assertEqual(repair.status, "COMPLETED")
         self.assertEqual(device.status, "COMPLETED")
+        self.assertEqual(device.assigned_employee, employee)
+        self.assertEqual(device.assigned_branch, self.branch)
+        self.assertTrue(
+            DeviceAssignment.objects.filter(
+                device=device,
+                employee=employee,
+                branch=self.branch,
+                returned_date__isnull=True,
+            ).exists()
+        )
+
+        self.client.force_authenticate(self.head_office)
+        reassign_response = self.client.post(
+            f"/api/repair-requests/{repair.id}/reassign_completed/",
+            {"condition_on_issue": "Issue returned"},
+            format="json",
+        )
+        self.assertEqual(reassign_response.status_code, status.HTTP_200_OK)
+        device.refresh_from_db()
+        repair.refresh_from_db()
+        self.assertEqual(device.status, "ASSIGNED")
+        self.assertEqual(device.assigned_employee, employee)
+        self.assertEqual(repair.status, "COMPLETED")
 
     def test_employee_pages_render_for_own_devices_and_repairs(self):
         employee_user = User.objects.create_user(

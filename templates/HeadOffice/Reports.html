@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Head Office Reports{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="feather-bar-chart-2 me-2"></i>Head Office Reports</h1>
+                    <p class="text-muted mb-0">Employees, repairs, inventory, branches, and activity logs</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-danger" href="?{{ request.GET.urlencode }}{% if request.GET.urlencode %}&{% endif %}export=pdf">
+                        <i class="feather-file-text me-1"></i>PDF
+                    </a>
+                    <a class="btn btn-outline-success" href="?{{ request.GET.urlencode }}{% if request.GET.urlencode %}&{% endif %}export=excel">
+                        <i class="feather-download me-1"></i>Excel
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Date From</label>
+                    <input type="date" name="date_from" value="{{ selected.date_from }}" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Date To</label>
+                    <input type="date" name="date_to" value="{{ selected.date_to }}" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Branch</label>
+                    <select name="branch" class="form-select">
+                        <option value="">All branches</option>
+                        {% for branch in branches %}
+                        <option value="{{ branch.id }}" {% if selected.branch == branch.id|stringformat:"s" %}selected{% endif %}>{{ branch.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Employee</label>
+                    <select name="employee" class="form-select">
+                        <option value="">All employees</option>
+                        {% for employee in employees_filter %}
+                        <option value="{{ employee.id }}" {% if selected.employee == employee.id|stringformat:"s" %}selected{% endif %}>{{ employee.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All statuses</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if selected.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button class="btn btn-primary flex-fill" type="submit"><i class="feather-filter me-1"></i>Filter</button>
+                    <a href="{% url 'head_office_reports' %}" class="btn btn-outline-secondary"><i class="feather-x"></i></a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Active Employees</h6><h2>{{ active_employees }}</h2><small class="text-muted">{{ inactive_employees }} inactive</small></div></div></div>
+        <div class="col-lg-3 col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Device Assignments</h6><h2>{{ device_assignments }}</h2><small class="text-muted">Current active assignments</small></div></div></div>
+        <div class="col-lg-3 col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Repairs</h6><h2>{{ pending_repairs }}</h2><small class="text-muted">{{ assigned_repairs }} assigned, {{ completed_repairs }} completed</small></div></div></div>
+        <div class="col-lg-3 col-md-6 mb-3"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Inventory</h6><h2>{{ available_inventory }}</h2><small class="text-muted">{{ assigned_inventory }} assigned, {{ damaged_inventory }} damaged/repair</small></div></div></div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="card-title mb-0">Technician Performance</h5></div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light"><tr><th>Technician</th><th class="text-end">Completed Repairs</th></tr></thead>
+                        <tbody>
+                        {% for row in technician_performance %}
+                            <tr><td>{{ row.technician__username|default:"Unassigned" }}</td><td class="text-end">{{ row.completed }}</td></tr>
+                        {% empty %}
+                            <tr><td colspan="2" class="text-center text-muted py-3">No repair logs</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="card-title mb-0">Branch Statistics</h5></div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light"><tr><th>Branch</th><th class="text-end">Devices</th><th class="text-end">Repair Records</th></tr></thead>
+                        <tbody>
+                        {% for row in branch_stats %}
+                            <tr><td>{{ row.assigned_branch__name|default:"Unassigned" }}</td><td class="text-end">{{ row.total }}</td><td class="text-end">{{ row.repairs }}</td></tr>
+                        {% empty %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No branch data</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#employeeReport" type="button">Employee Reports</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#repairReport" type="button">Repair Reports</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#inventoryReport" type="button">Inventory Reports</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#activityReport" type="button">Activity Logs</button></li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="employeeReport">
+            <div class="card"><div class="card-body p-0"><div class="table-responsive">
+                <table class="table table-hover mb-0"><thead class="table-light"><tr><th>Name</th><th>Status</th><th>Branch</th><th>Department</th><th>Assignments</th></tr></thead><tbody>
+                {% for employee in employee_rows %}
+                    <tr><td>{{ employee.full_name }}</td><td><span class="badge bg-light text-dark">{{ employee.status }}</span></td><td>{{ employee.branch.name|default:"-" }}</td><td>{{ employee.department.name|default:"-" }}</td><td>{{ employee.device_set.count }}</td></tr>
+                {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-3">No employees found</td></tr>
+                {% endfor %}
+                </tbody></table>
+            </div></div></div>
+        </div>
+        <div class="tab-pane fade" id="repairReport">
+            <div class="card"><div class="card-body p-0"><div class="table-responsive">
+                <table class="table table-hover mb-0"><thead class="table-light"><tr><th>Device</th><th>Employee</th><th>Status</th><th>Technician</th><th>Date</th></tr></thead><tbody>
+                {% for repair in repair_rows %}
+                    <tr><td>{{ repair.device.company_tag }}</td><td>{{ repair.employee.full_name }}</td><td><span class="badge bg-light text-dark">{{ repair.status }}</span></td><td>{{ repair.repairlog.technician.username|default:"-" }}</td><td>{{ repair.request_date|date:"M d, Y" }}</td></tr>
+                {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-3">No repairs found</td></tr>
+                {% endfor %}
+                </tbody></table>
+            </div></div></div>
+        </div>
+        <div class="tab-pane fade" id="inventoryReport">
+            <div class="card"><div class="card-body p-0"><div class="table-responsive">
+                <table class="table table-hover mb-0"><thead class="table-light"><tr><th>Device</th><th>Asset Code</th><th>Status</th><th>Employee</th><th>Branch</th></tr></thead><tbody>
+                {% for device in inventory_rows %}
+                    <tr><td>{{ device.device_type }} - {{ device.brand }} {{ device.model }}</td><td>{{ device.company_tag }}</td><td><span class="badge bg-light text-dark">{{ device.status }}</span></td><td>{{ device.assigned_employee.full_name|default:"-" }}</td><td>{{ device.assigned_branch.name|default:"Head Office" }}</td></tr>
+                {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-3">No inventory found</td></tr>
+                {% endfor %}
+                </tbody></table>
+            </div></div></div>
+        </div>
+        <div class="tab-pane fade" id="activityReport">
+            <div class="card"><div class="card-body p-0"><div class="table-responsive">
+                <table class="table table-hover mb-0"><thead class="table-light"><tr><th>User</th><th>Action</th><th>Object</th><th>Details</th><th>Time</th></tr></thead><tbody>
+                {% for audit in audit_rows %}
+                    <tr><td>{{ audit.user.username|default:"System" }}</td><td>{{ audit.action }}</td><td>{{ audit.model_name }} #{{ audit.object_id|default:"-" }}</td><td>{{ audit.details|truncatechars:80 }}</td><td>{{ audit.timestamp|date:"M d, Y H:i" }}</td></tr>
+                {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-3">No activity logs found</td></tr>
+                {% endfor %}
+                </tbody></table>
+            </div></div></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
