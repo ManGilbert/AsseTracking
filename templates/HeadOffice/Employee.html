@@ -175,7 +175,16 @@
                         <label class="form-label">Position <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="position" required>
                     </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Role <span class="text-danger">*</span></label>
+                        <select class="form-select" id="loginRole" required>
+                            <option value="EMPLOYEE">Employee</option>
+                            <option value="BRANCH_MANAGER">Branch Manager</option>
+                            <option value="TECHNICIAN">Technician</option>
+                        </select>
+                    </div>
                 </div>
+                
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label">Branch <span class="text-danger">*</span></label>
@@ -193,16 +202,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Role <span class="text-danger">*</span></label>
-                        <select class="form-select" id="loginRole" required>
-                            <option value="EMPLOYEE">Employee</option>
-                            <option value="BRANCH_MANAGER">Branch Manager</option>
-                            <option value="TECHNICIAN">Technician</option>
-                        </select>
-                    </div>
-                </div>
+
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label">Username <span class="text-danger">*</span></label>
@@ -247,6 +247,14 @@
                         <label class="form-label">Position</label>
                         <input type="text" class="form-control" id="editPosition" required>
                     </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" id="editStatus">
+                            {% for status, label in statuses %}
+                            <option value="{{ status }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -261,16 +269,6 @@
                         <label class="form-label">Department</label>
                         <select class="form-select" id="editDepartmentId">
                             <option value="">No department</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Status</label>
-                        <select class="form-select" id="editStatus">
-                            {% for status, label in statuses %}
-                            <option value="{{ status }}">{{ label }}</option>
-                            {% endfor %}
                         </select>
                     </div>
                 </div>
