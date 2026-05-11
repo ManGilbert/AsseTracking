@@ -30,6 +30,8 @@ class AsseTrackSession {
                 console.error('Failed to parse user data:', e);
                 this.logout();
             }
+        } else if (window.currentUser) {
+            this.user = window.currentUser;
         }
     }
 
@@ -123,10 +125,16 @@ class AsseTrackSession {
 
         const defaultOptions = {
             headers: {
-                'Authorization': `Bearer ${this.token}`,
                 'Content-Type': 'application/json',
             }
         };
+        if (this.token) {
+            defaultOptions.headers.Authorization = `Bearer ${this.token}`;
+        }
+        if (!['GET', 'HEAD', 'OPTIONS'].includes((options.method || 'GET').toUpperCase())) {
+            const csrfToken = this.getCookie('csrftoken');
+            if (csrfToken) defaultOptions.headers['X-CSRFToken'] = csrfToken;
+        }
 
         const mergedOptions = { ...defaultOptions, ...options };
         if (mergedOptions.headers['Content-Type'] === 'multipart/form-data') {
@@ -135,7 +143,7 @@ class AsseTrackSession {
 
         let response = await fetch(url, mergedOptions);
 
-        if (response.status === 401) {
+        if (response.status === 401 && this.refreshToken) {
             // Try to refresh token
             if (await this.refreshAccessToken()) {
                 mergedOptions.headers['Authorization'] = `Bearer ${this.token}`;
@@ -151,6 +159,13 @@ class AsseTrackSession {
         }
 
         return await response.json();
+    }
+
+    getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
     }
 
     async refreshAccessToken() {

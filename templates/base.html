@@ -561,7 +561,8 @@
                 </div>
                 <div class="modal-body" id="appMessageBody"></div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                    <button type="button" class="btn btn-secondary d-none" id="appMessageCancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="appMessageOk" data-bs-dismiss="modal">OK</button>
                 </div>
             </div>
         </div>
@@ -578,20 +579,54 @@
     <script type="module" src="{% static 'assets/js/assetrack/layout-session.js' %}"></script>
     <script>
         (function () {
-            const nativeAlert = window.alert.bind(window);
             window.showAppMessage = function (message, title = 'Message', type = 'info') {
                 if (window.Swal) {
                     return Swal.fire({title, text: String(message), icon: type});
                 }
                 const modalElement = document.getElementById('appMessageModal');
                 if (!modalElement || !window.bootstrap) {
-                    nativeAlert(message);
+                    console.warn(message);
                     return Promise.resolve();
                 }
+                const cancelButton = document.getElementById('appMessageCancel');
+                const okButton = document.getElementById('appMessageOk');
+                cancelButton.classList.add('d-none');
+                okButton.className = `btn btn-${type === 'error' ? 'danger' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'primary'}`;
+                okButton.textContent = 'OK';
                 document.getElementById('appMessageTitle').textContent = title;
-                document.getElementById('appMessageBody').innerHTML = String(message).replaceAll('\n', '<br>');
-                bootstrap.Modal.getOrCreateInstance(modalElement).show();
-                return Promise.resolve();
+                const body = document.getElementById('appMessageBody');
+                body.style.whiteSpace = 'pre-line';
+                body.textContent = String(message);
+                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+                modal.show();
+                return new Promise(resolve => {
+                    modalElement.addEventListener('hidden.bs.modal', () => resolve(), { once: true });
+                });
+            };
+            window.showAppConfirm = function (message, title = 'Confirm') {
+                const modalElement = document.getElementById('appMessageModal');
+                if (!modalElement || !window.bootstrap) {
+                    console.warn(message);
+                    return Promise.resolve(false);
+                }
+                const cancelButton = document.getElementById('appMessageCancel');
+                const okButton = document.getElementById('appMessageOk');
+                let confirmed = false;
+                cancelButton.classList.remove('d-none');
+                okButton.className = 'btn btn-primary';
+                okButton.textContent = 'OK';
+                document.getElementById('appMessageTitle').textContent = title;
+                document.getElementById('appMessageBody').textContent = message;
+                const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+                const onOk = () => { confirmed = true; };
+                okButton.addEventListener('click', onOk, { once: true });
+                modal.show();
+                return new Promise(resolve => {
+                    modalElement.addEventListener('hidden.bs.modal', () => {
+                        okButton.removeEventListener('click', onOk);
+                        resolve(confirmed);
+                    }, { once: true });
+                });
             };
             window.alert = function (message) {
                 window.showAppMessage(message, 'Message', 'info');

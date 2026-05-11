@@ -84,6 +84,16 @@ from .services import (
 DEACTIVATED_ACCOUNT_MESSAGE = "Your account has been deactivated. Please contact the administrator."
 
 
+def _notify_user(user, message):
+    if user:
+        Notification.objects.create(user=user, message=message)
+
+
+def _notify_head_office(message):
+    for user in User.objects.filter(role="HEAD_OFFICE", is_active=True):
+        Notification.objects.create(user=user, message=message)
+
+
 def _sync_employee_user_active_state(employee):
     if not employee.user:
         return
@@ -1016,6 +1026,11 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             session.id,
             f"Session for {session.branch.name}",
         )
+        if session.branch.manager:
+            _notify_user(
+                session.branch.manager.user,
+                f"Head Office completed final approval for {session.branch.name} inventory.",
+            )
         return Response(self.get_serializer(session).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], permission_classes=[CanCreateInventorySession])
@@ -1044,6 +1059,9 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             "InventorySession",
             session.id,
             f"Session for {session.branch.name}",
+        )
+        _notify_head_office(
+            f"{session.branch.name} inventory was approved by the Branch Manager and is ready for final approval."
         )
         return Response(self.get_serializer(session).data, status=status.HTTP_200_OK)
 
@@ -1156,6 +1174,11 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             item.id,
             f"Device {item.device.company_tag} marked extra",
         )
+        if item.session.branch.manager:
+            _notify_user(
+                item.session.branch.manager.user,
+                f"Found device {item.device.company_tag} was registered during {item.session.branch.name} inventory.",
+            )
         return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
@@ -1174,6 +1197,11 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             item.id,
             f"Device {item.device.company_tag} marked in repair",
         )
+        if item.session.branch.manager:
+            _notify_user(
+                item.session.branch.manager.user,
+                f"Device {item.device.company_tag} was marked in repair during {item.session.branch.name} inventory.",
+            )
         return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
@@ -1197,6 +1225,11 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             item.id,
             f"Device {device.company_tag} returned to Head Office inventory",
         )
+        if item.session.branch.manager:
+            _notify_user(
+                item.session.branch.manager.user,
+                f"Device {device.company_tag} was returned to Head Office from {item.session.branch.name} inventory.",
+            )
         return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
 
 
@@ -1805,36 +1838,10 @@ def head_office_inventory(request):
     ).prefetch_related('items', 'items__device', 'items__device__assigned_employee').all().order_by('-start_date')
     
     branches = Branch.objects.all()
-    departments = Department.objects.values("name").distinct().order_by("name")
-    devices_by_department = []
-    all_devices = Device.objects.select_related("assigned_employee", "assigned_branch").order_by("company_tag")
-    for department in departments:
-        name = department["name"]
-        devices_by_department.append(
-            {
-                "name": name,
-                "devices": all_devices.filter(assigned_employee__department__name=name),
-            }
-        )
-    devices_by_department.append(
-        {
-            "name": "Unassigned / Head Office",
-            "devices": all_devices.filter(assigned_employee__isnull=True),
-        }
-    )
-    latest_session = inventory_sessions.first()
-    report_items = latest_session.items.all() if latest_session else InventoryItem.objects.none()
     
     context = {
         'inventory_sessions': inventory_sessions,
         'branches': branches,
-        'devices_by_department': devices_by_department,
-        'latest_session': latest_session,
-        'report_total': report_items.count(),
-        'report_verified': report_items.filter(status="VERIFIED").count(),
-        'report_missing': report_items.filter(status="MISSING").count(),
-        'report_repair': report_items.filter(status="IN_REPAIR").count(),
-        'report_returned': report_items.filter(status="RETURNED_HEAD_OFFICE").count(),
     }
     return render(request, "HeadOffice/Inventory.html", context)
 
@@ -1843,20 +1850,52 @@ def head_office_inventory(request):
 @role_required("HEAD_OFFICE")
 def head_office_inventory_detail(request, session_id):
     """Dedicated inventory session details page."""
-    session = InventorySession.objects.select_related("branch", "created_by").prefetch_related(
+    session = get_object_or_404(InventorySession.objects.select_related("branch", "created_by").prefetch_related(
         "items",
         "items__device",
         "items__device__assigned_employee",
         "items__device__assigned_branch",
-    ).get(id=session_id)
-    items = session.items.select_related(
+    ), id=session_id)
+    items = list(session.items.select_related(
         "device", "device__assigned_employee", "device__assigned_branch"
-    ).all().order_by("device__company_tag")
-    status_counts = items.values("status").annotate(count=Count("id")).order_by("status")
+    ).all().order_by("device__company_tag"))
+    departments = Department.objects.filter(branch=session.branch).order_by("name")
+    department_groups = []
+    grouped_item_ids = set()
+
+    for department in departments:
+        department_items = [
+            item for item in items
+            if item.device.assigned_employee and item.device.assigned_employee.department_id == department.id
+        ]
+        grouped_item_ids.update(item.id for item in department_items)
+        department_groups.append(
+            {
+                "name": department.name,
+                "items": department_items,
+                "count": len(department_items),
+            }
+        )
+
+    other_items = [item for item in items if item.id not in grouped_item_ids]
+    department_groups.append(
+        {
+            "name": "Unassigned / Head Office",
+            "items": other_items,
+            "count": len(other_items),
+        }
+    )
+
+    report_total = len(items)
     context = {
         "session": session,
         "items": items,
-        "status_counts": status_counts,
+        "department_groups": department_groups,
+        "report_status": "Completed" if session.end_date else "In Progress",
+        "report_total": report_total,
+        "report_missing": sum(1 for item in items if item.status == "MISSING"),
+        "report_repair": sum(1 for item in items if item.status == "IN_REPAIR"),
+        "report_returned": sum(1 for item in items if item.status == "RETURNED_HEAD_OFFICE"),
     }
     return render(request, "HeadOffice/InventoryDetail.html", context)
 

@@ -18,7 +18,7 @@
                     </a>
                     {% if not session.approved_by_head_office %}
                     <button class="btn btn-success" onclick="approveInventorySession({{ session.id }})">
-                        <i class="feather-check me-1"></i>Approve
+                        <i class="feather-check me-1"></i>Final Approval
                     </button>
                     {% endif %}
                     {% if not session.end_date %}
@@ -33,7 +33,7 @@
 
     <div class="row mb-4">
         <div class="col-md-3 mb-2">
-            <div class="card h-100"><div class="card-body"><h6 class="text-muted">Items</h6><h2 class="mb-0">{{ items.count }}</h2></div></div>
+            <div class="card h-100"><div class="card-body"><h6 class="text-muted">Items</h6><h2 class="mb-0">{{ report_total }}</h2></div></div>
         </div>
         <div class="col-md-3 mb-2">
             <div class="card h-100"><div class="card-body"><h6 class="text-muted">Branch Approval</h6><span class="badge {% if session.approved_by_branch %}bg-success{% else %}bg-warning{% endif %}">{{ session.approved_by_branch|yesno:"Approved,Pending" }}</span></div></div>
@@ -46,80 +46,189 @@
         </div>
     </div>
 
-    <div class="card">
+    <div class="card mb-4">
         <div class="card-header">
             <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
-                <h5 class="card-title mb-0">Inventory Items</h5>
+                <h5 class="card-title mb-0">Departments</h5>
                 <div class="input-group" style="max-width: 360px;">
                     <span class="input-group-text"><i class="feather-search"></i></span>
-                    <input type="search" class="form-control" id="searchInventoryItems" data-table-search="#inventoryItemsTable" placeholder="Search devices...">
+                    <input type="search" class="form-control" id="searchInventoryItems" placeholder="Search devices...">
                 </div>
             </div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0" id="inventoryItemsTable">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Device</th>
-                            <th>Asset Code</th>
-                            <th>Serial</th>
-                            <th>Assigned Employee</th>
-                            <th>Branch</th>
-                            <th>Status</th>
-                            <th>Comment</th>
-                            <th class="text-end">Mark</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    {% for item in items %}
-                        <tr>
-                            <td>{{ item.device.device_type }} - {{ item.device.brand }} {{ item.device.model }}</td>
-                            <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
-                            <td>{{ item.device.serial_number }}</td>
-                            <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
-                            <td>{{ item.device.assigned_branch.name|default:session.branch.name }}</td>
-                            <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
-                            <td>{{ item.comment|default:"-" }}</td>
-                            <td class="text-end">
-                                <button class="btn btn-sm btn-outline-success" onclick="markInventoryItem({{ item.id }}, 'mark_verified')">Verified</button>
-                                <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_missing')">Missing</button>
-                                <button class="btn btn-sm btn-outline-info" onclick="markInventoryItem({{ item.id }}, 'mark_extra')">Register Found Device</button>
-                                <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_in_repair')">In Repair</button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="markInventoryItem({{ item.id }}, 'return_head_office')">Returned to Head Office</button>
-                            </td>
-                        </tr>
-                    {% empty %}
-                        <tr><td colspan="8" class="text-center text-muted py-4">No inventory items.</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+        <div class="card-body">
+            <div class="accordion" id="departmentInventoryAccordion">
+                {% for group in department_groups %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="departmentHeading{{ forloop.counter }}">
+                        <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#departmentPanel{{ forloop.counter }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="departmentPanel{{ forloop.counter }}">
+                            {{ group.name }} <span class="badge bg-light text-dark ms-2">{{ group.count }}</span>
+                        </button>
+                    </h2>
+                    <div id="departmentPanel{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" aria-labelledby="departmentHeading{{ forloop.counter }}" data-bs-parent="#departmentInventoryAccordion">
+                        <div class="accordion-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0 inventory-device-table">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Tag</th>
+                                            <th>Serial</th>
+                                            <th>Model</th>
+                                            <th>Employee</th>
+                                            <th>Status</th>
+                                            <th>Comment</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    {% for item in group.items %}
+                                        <tr class="inventory-device-row" role="button" tabindex="0"
+                                            data-item-id="{{ item.id }}"
+                                            data-tag="{{ item.device.company_tag }}"
+                                            data-serial="{{ item.device.serial_number }}"
+                                            data-model="{{ item.device.brand }} {{ item.device.model }}"
+                                            data-employee="{{ item.device.assigned_employee.full_name|default:'-' }}"
+                                            data-status="{{ item.status }}"
+                                            data-comment="{{ item.comment|default:'' }}">
+                                            <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
+                                            <td>{{ item.device.serial_number }}</td>
+                                            <td>{{ item.device.brand }} {{ item.device.model }}</td>
+                                            <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
+                                            <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
+                                            <td>{{ item.comment|default:"-" }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr><td colspan="6" class="text-center text-muted py-4">No devices in this department.</td></tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h5 class="card-title mb-0">Inventory Summary</h5></div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md"><strong>Completed inventory status</strong><div>{{ report_status }}</div></div>
+                <div class="col-md"><strong>Total devices</strong><div>{{ report_total }}</div></div>
+                <div class="col-md"><strong>Missing devices</strong><div>{{ report_missing }}</div></div>
+                <div class="col-md"><strong>Under repair</strong><div>{{ report_repair }}</div></div>
+                <div class="col-md"><strong>Returned devices</strong><div>{{ report_returned }}</div></div>
             </div>
         </div>
     </div>
 </div>
 
+<div class="modal fade" id="inventoryActionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="inventoryActionForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Update Inventory Device</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="inventoryItemId">
+                    <div class="mb-3">
+                        <div class="fw-semibold" id="inventoryDeviceTitle"></div>
+                        <div class="text-muted small" id="inventoryDeviceMeta"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Inventory Action</label>
+                        <select class="form-select" id="inventoryAction" required>
+                            <option value="mark_verified">Verified (Device is OK)</option>
+                            <option value="mark_missing">Missing</option>
+                            <option value="mark_extra">Register Found Device</option>
+                            <option value="mark_in_repair">In Repair</option>
+                            <option value="return_head_office">Returned to Head Office</option>
+                        </select>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Comment</label>
+                        <textarea class="form-control" id="inventoryComment" rows="3" placeholder="Add details for this inventory update"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Update</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-function approveInventorySession(sessionId) {
-    if (!confirm('Approve this inventory session for Head Office?')) return;
-    fetch(`/api/inventory-sessions/${sessionId}/approve_head_office/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
-        .then(response => response.ok ? location.reload() : response.json().then(e => alert(getApiError(e, 'Error approving inventory session'))));
+const inventoryActionModalElement = document.getElementById('inventoryActionModal');
+const inventoryActionModal = inventoryActionModalElement ? bootstrap.Modal.getOrCreateInstance(inventoryActionModalElement) : null;
+
+document.querySelectorAll('.inventory-device-row').forEach(row => {
+    const openModal = () => openInventoryAction(row);
+    row.addEventListener('click', openModal);
+    row.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openModal();
+        }
+    });
+});
+
+document.getElementById('searchInventoryItems').addEventListener('input', function() {
+    const term = this.value.toLowerCase().trim();
+    document.querySelectorAll('.inventory-device-row').forEach(row => {
+        row.hidden = term && !row.textContent.toLowerCase().includes(term);
+    });
+});
+
+function openInventoryAction(row) {
+    document.getElementById('inventoryItemId').value = row.dataset.itemId;
+    document.getElementById('inventoryDeviceTitle').textContent = `${row.dataset.tag} - ${row.dataset.model}`;
+    document.getElementById('inventoryDeviceMeta').textContent = `Serial: ${row.dataset.serial} | Employee: ${row.dataset.employee} | Current status: ${row.dataset.status}`;
+    document.getElementById('inventoryComment').value = row.dataset.comment || '';
+    inventoryActionModal.show();
 }
 
-function closeInventorySession(sessionId) {
-    if (!confirm('Close this inventory session?')) return;
-    fetch(`/api/inventory-sessions/${sessionId}/close/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
-        .then(response => response.ok ? location.reload() : response.json().then(e => alert(getApiError(e, 'Error closing inventory session'))));
-}
+document.getElementById('inventoryActionForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    const itemId = document.getElementById('inventoryItemId').value;
+    const action = document.getElementById('inventoryAction').value;
+    const comment = document.getElementById('inventoryComment').value;
 
-function markInventoryItem(itemId, action) {
-    const comment = prompt('Comment (damaged, wrong location, not found, or other update):', '');
-    if (comment === null) return;
     fetch(`/api/inventory-items/${itemId}/${action}/`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
         body: JSON.stringify({comment})
-    }).then(response => response.ok ? location.reload() : response.json().then(e => alert(getApiError(e, 'Error updating inventory item'))));
+    }).then(response => {
+        if (response.ok) {
+            showAppMessage('Inventory device updated successfully.', 'Success', 'success').then(() => location.reload());
+        } else {
+            response.json().then(error => showAppMessage(getApiError(error, 'Error updating inventory item'), 'Error', 'error'));
+        }
+    });
+});
+
+async function approveInventorySession(sessionId) {
+    if (!(await showAppConfirm('Complete final Head Office approval for this inventory session?', 'Final Approval'))) return;
+    fetch(`/api/inventory-sessions/${sessionId}/approve_head_office/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
+        .then(response => response.ok ? location.reload() : response.json().then(error => showAppMessage(getApiError(error, 'Error approving inventory session'), 'Error', 'error')));
+}
+
+async function closeInventorySession(sessionId) {
+    if (!(await showAppConfirm('Close this inventory session?', 'Close Inventory'))) return;
+    fetch(`/api/inventory-sessions/${sessionId}/close/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
+        .then(response => response.ok ? location.reload() : response.json().then(error => showAppMessage(getApiError(error, 'Error closing inventory session'), 'Error', 'error')));
+}
+
+async function showAppConfirm(message, title = 'Confirm') {
+    if (window.showAppConfirm) {
+        return window.showAppConfirm(message, title);
+    }
+    console.warn(`${title}: ${message}`);
+    return Promise.resolve(false);
 }
 
 function getCookie(name) {

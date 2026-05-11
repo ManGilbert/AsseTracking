@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q
 from .models import (
+    User,
     Device,
     DeviceAssignment,
     Employee,
@@ -23,6 +24,16 @@ from .models import (
     AuditLog,
     Notification,
 )
+
+
+def _notify_user(user, message):
+    if user:
+        Notification.objects.create(user=user, message=message)
+
+
+def _notify_head_office(message):
+    for user in User.objects.filter(role="HEAD_OFFICE", is_active=True):
+        Notification.objects.create(user=user, message=message)
 
 
 class DeviceAssignmentService:
@@ -112,6 +123,15 @@ class DeviceAssignmentService:
                 object_id=device.id,
                 details=f"Assigned to {employee.full_name}",
             )
+            _notify_user(
+                employee.user,
+                f"Device {device.company_tag} has been assigned to you.",
+            )
+            if employee.branch and employee.branch.manager:
+                _notify_user(
+                    employee.branch.manager.user,
+                    f"Device {device.company_tag} was assigned to {employee.full_name}.",
+                )
 
             return assignment
 
@@ -158,6 +178,10 @@ class DeviceAssignmentService:
                 model_name="Device",
                 object_id=device.id,
                 details=f"Returned by {assignment.employee.full_name}",
+            )
+            _notify_user(
+                assignment.employee.user if assignment.employee else None,
+                f"Device {device.company_tag} has been returned to Head Office.",
             )
 
             return assignment
@@ -227,6 +251,9 @@ class RepairService:
                 object_id=repair_request.id,
                 details=issue_description,
             )
+            _notify_head_office(
+                f"New repair request for device {device.company_tag} from {employee.full_name}."
+            )
 
             return repair_request
 
@@ -265,6 +292,10 @@ class RepairService:
                 object_id=repair_request.id,
                 details=f"Approved by {approved_by_user.username}",
             )
+            _notify_user(
+                repair_request.employee.user,
+                f"Repair request for device {device.company_tag} was approved.",
+            )
 
             return repair_request
 
@@ -297,6 +328,10 @@ class RepairService:
                 model_name="RepairRequest",
                 object_id=repair_request.id,
                 details=f"Rejected by {approved_by_user.username}",
+            )
+            _notify_user(
+                repair_request.employee.user,
+                f"Repair request for device {repair_request.device.company_tag} was rejected.",
             )
 
             return repair_request
@@ -356,6 +391,10 @@ class RepairService:
                 model_name="RepairRequest",
                 object_id=repair_request.id,
                 details=f"Started by {technician_user.username}",
+            )
+            _notify_user(
+                repair_request.employee.user,
+                f"Repair work started for device {device.company_tag}.",
             )
 
             return repair_log
@@ -434,6 +473,13 @@ class RepairService:
                 object_id=repair_log.id,
                 details=f"Completed by {technician_user.username}",
             )
+            _notify_user(
+                repair_request.employee.user,
+                f"Repair completed for device {device.company_tag}.",
+            )
+            _notify_head_office(
+                f"Repair completed for device {device.company_tag} by {technician_user.username}."
+            )
 
             return repair_log
 
@@ -486,6 +532,10 @@ class RepairService:
                 model_name="RepairRequest",
                 object_id=repair_request.id,
                 details=f"Completed repair reassigned to {employee.full_name}",
+            )
+            _notify_user(
+                employee.user,
+                f"Device {device.company_tag} has been reassigned after repair.",
             )
 
             return assignment
@@ -544,6 +594,11 @@ class InventoryService:
                 object_id=session.id,
                 details=f"Session created for {branch.name}",
             )
+            if branch.manager:
+                _notify_user(
+                    branch.manager.user,
+                    f"Inventory session started for {branch.name}.",
+                )
 
             return session
 
@@ -565,6 +620,11 @@ class InventoryService:
                 object_id=item.id,
                 details=f"Device {item.device.company_tag} verified",
             )
+            if item.session.branch.manager:
+                _notify_user(
+                    item.session.branch.manager.user,
+                    f"Device {item.device.company_tag} was verified during {item.session.branch.name} inventory.",
+                )
 
     @staticmethod
     def mark_item_missing(item_id, verified_by_user, comment=None):
@@ -589,6 +649,11 @@ class InventoryService:
                 object_id=item.id,
                 details=f"Device {device.company_tag} marked missing",
             )
+            if item.session.branch.manager:
+                _notify_user(
+                    item.session.branch.manager.user,
+                    f"Device {device.company_tag} was marked missing during {item.session.branch.name} inventory.",
+                )
 
 
 class EmployeeExitService:

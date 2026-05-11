@@ -20,74 +20,6 @@
         </div>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Inventory by Department</h5>
-                </div>
-                <div class="card-body">
-                    <div class="accordion" id="departmentInventoryAccordion">
-                        {% for group in devices_by_department %}
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#department{{ forloop.counter }}">
-                                    {{ group.name }} <span class="badge bg-light text-dark ms-2">{{ group.devices.count }}</span>
-                                </button>
-                            </h2>
-                            <div id="department{{ forloop.counter }}" class="accordion-collapse collapse" data-bs-parent="#departmentInventoryAccordion">
-                                <div class="accordion-body p-0">
-                                    <div class="table-responsive">
-                                        <table class="table table-hover mb-0">
-                                            <thead class="table-light">
-                                                <tr><th>Tag</th><th>Serial</th><th>Model</th><th>Employee</th><th>Status</th><th>Comment</th></tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for device in group.devices %}
-                                                <tr>
-                                                    <td>{{ device.company_tag }}</td>
-                                                    <td>{{ device.serial_number }}</td>
-                                                    <td>{{ device.brand }} {{ device.model }}</td>
-                                                    <td>{{ device.assigned_employee.full_name|default:"-" }}</td>
-                                                    <td><span class="badge bg-light text-dark">{{ device.status }}</span></td>
-                                                    <td>{{ device.condition_notes|default:"-" }}</td>
-                                                </tr>
-                                                {% empty %}
-                                                <tr><td colspan="6" class="text-center text-muted py-3">No devices in this department.</td></tr>
-                                                {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {% if latest_session %}
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header"><h5 class="card-title mb-0">Latest Inventory Summary</h5></div>
-                <div class="card-body">
-                    <div class="row g-3">
-                        <div class="col-md-2"><strong>Status</strong><div>{{ latest_session.end_date|yesno:"Completed,In Progress" }}</div></div>
-                        <div class="col-md-2"><strong>Device Count</strong><div>{{ report_total }}</div></div>
-                        <div class="col-md-2"><strong>Verified</strong><div>{{ report_verified }}</div></div>
-                        <div class="col-md-2"><strong>Missing</strong><div>{{ report_missing }}</div></div>
-                        <div class="col-md-2"><strong>In Repair</strong><div>{{ report_repair }}</div></div>
-                        <div class="col-md-2"><strong>Returned</strong><div>{{ report_returned }}</div></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Inventory Sessions -->
     <div class="row">
         <div class="col-12">
@@ -170,58 +102,6 @@
     </div>
 </div>
 
-{% for session in inventory_sessions %}
-<div class="modal fade" id="inventorySession{{ session.id }}" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">{{ session.branch.name }} Inventory Report</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row g-3 mb-3">
-                    <div class="col-md-3"><strong>Start</strong><div>{{ session.start_date|date:"M d, Y H:i" }}</div></div>
-                    <div class="col-md-3"><strong>End</strong><div>{{ session.end_date|date:"M d, Y H:i"|default:"In progress" }}</div></div>
-                    <div class="col-md-3"><strong>Branch Approval</strong><div>{{ session.approved_by_branch|yesno:"Approved,Pending" }}</div></div>
-                    <div class="col-md-3"><strong>Head Office Approval</strong><div>{{ session.approved_by_head_office|yesno:"Approved,Pending" }}</div></div>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead class="table-light">
-                            <tr><th>Check</th><th>Device</th><th>Tag</th><th>Assigned Employee</th><th>Status</th><th>Comment</th><th class="text-end">Mark</th></tr>
-                        </thead>
-                        <tbody>
-                        {% for item in session.items.all %}
-                            <tr>
-                                <td><input type="checkbox" class="form-check-input" {% if item.status == 'VERIFIED' %}checked{% endif %} disabled></td>
-                                <td>{{ item.device.device_type }} - {{ item.device.brand }} {{ item.device.model }}</td>
-                                <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
-                                <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
-                                <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
-                                <td>{{ item.comment|default:"-" }}</td>
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-success" onclick="markInventoryItem({{ item.id }}, 'mark_verified')">Verified</button>
-                                    <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_missing')">Missing</button>
-                                    <button class="btn btn-sm btn-outline-info" onclick="markInventoryItem({{ item.id }}, 'mark_extra')">Register Found Device</button>
-                                    <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_in_repair')">In Repair</button>
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="markInventoryItem({{ item.id }}, 'return_head_office')">Returned to Head Office</button>
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr><td colspan="7" class="text-center text-muted py-4">No inventory items.</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="alert alert-info mb-0">
-                    Found an unregistered device during inventory? Register it from Head Office Devices, then include the tag in the inventory comments.
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endfor %}
-
 <!-- Create Session Modal -->
 <div class="modal fade" id="createSessionModal" tabindex="-1">
     <div class="modal-dialog">
@@ -262,8 +142,8 @@
 </div>
 
 <script>
-function approveInventorySession(sessionId) {
-    if (!confirm('Approve this inventory session for Head Office?')) return;
+async function approveInventorySession(sessionId) {
+    if (!(await showAppConfirm('Approve this inventory session for Head Office?', 'Approve Inventory'))) return;
 
     fetch(`/api/inventory-sessions/${sessionId}/approve_head_office/`, {
         method: 'POST',
@@ -271,12 +151,12 @@ function approveInventorySession(sessionId) {
     })
     .then(response => {
         if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error approving inventory session')));
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error approving inventory session'), 'Error', 'error'));
     });
 }
 
-function closeInventorySession(sessionId) {
-    if (!confirm('Close this inventory session?')) return;
+async function closeInventorySession(sessionId) {
+    if (!(await showAppConfirm('Close this inventory session?', 'Close Inventory'))) return;
 
     fetch(`/api/inventory-sessions/${sessionId}/close/`, {
         method: 'POST',
@@ -284,7 +164,7 @@ function closeInventorySession(sessionId) {
     })
     .then(response => {
         if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error closing inventory session')));
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error closing inventory session'), 'Error', 'error'));
     });
 }
 
@@ -293,7 +173,7 @@ document.getElementById('createSessionForm').addEventListener('submit', function
     const branchId = document.getElementById('sessionBranch').value;
     
     if (!branchId) {
-        alert('Please select a branch');
+        showAppMessage('Please select a branch', 'Warning', 'warning');
         return;
     }
     
@@ -313,25 +193,19 @@ document.getElementById('createSessionForm').addEventListener('submit', function
     })
     .then(response => {
         if (response.ok) {
-            alert('Inventory session created successfully');
-            location.reload();
+            showAppMessage('Inventory session created successfully', 'Success', 'success').then(() => location.reload());
         } else {
-            response.json().then(e => alert(getApiError(e, 'Error creating inventory session')));
+            response.json().then(e => showAppMessage(getApiError(e, 'Error creating inventory session'), 'Error', 'error'));
         }
     });
 });
 
-function markInventoryItem(itemId, action) {
-    const comment = prompt('Comment (damaged, wrong location, not found, or other update):', '');
-    if (comment === null) return;
-    fetch(`/api/inventory-items/${itemId}/${action}/`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
-        body: JSON.stringify({comment})
-    }).then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error updating inventory item')));
-    });
+async function showAppConfirm(message, title = 'Confirm') {
+    if (window.showAppConfirm) {
+        return window.showAppConfirm(message, title);
+    }
+    console.warn(`${title}: ${message}`);
+    return Promise.resolve(false);
 }
 
 function getCookie(name) {

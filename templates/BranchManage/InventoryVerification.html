@@ -52,14 +52,14 @@
     {% endfor %}
 </div>
 <script>
-function approveBranchInventory(sessionId) {
-    if (!confirm('Approve this branch inventory?')) return;
+async function approveBranchInventory(sessionId) {
+    if (!(await showAppConfirm('Approve this branch inventory?', 'Approve Inventory'))) return;
     fetch(`/api/inventory-sessions/${sessionId}/approve_branch/`, {
         method: 'POST',
         headers: {'X-CSRFToken': getCookie('csrftoken')}
     }).then(response => {
         if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error approving branch inventory')));
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error approving branch inventory'), 'Error', 'error'));
     });
 }
 function getCookie(name) {
