@@ -122,9 +122,6 @@
                                                     onclick="openEditRepairModal({{ repair.id }}, {{ repair.device.id }}, {{ repair.employee.id }}, '{{ repair.priority|escapejs }}', '{{ repair.issue_description|escapejs }}')">
                                                 <i class="feather-edit"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteRepair({{ repair.id }})">
-                                                <i class="feather-trash-2"></i>
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -168,9 +165,6 @@
                                         <div class="hstack gap-1 justify-content-end">
                                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}">
                                                 <i class="feather-eye"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteRepair({{ repair.id }})">
-                                                <i class="feather-trash-2"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -216,9 +210,6 @@
                                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}">
                                                 <i class="feather-eye"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteRepair({{ repair.id }})">
-                                                <i class="feather-trash-2"></i>
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -263,9 +254,6 @@
                                             </button>
                                             <button class="btn btn-sm btn-outline-success" onclick="reassignCompletedRepair({{ repair.id }})">
                                                 <i class="feather-repeat me-1"></i>Reassign
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteRepair({{ repair.id }})">
-                                                <i class="feather-trash-2"></i>
                                             </button>
                                         </div>
                                     </td>
@@ -521,19 +509,6 @@ function rejectRepair(repairId) {
     .then(response => {
         if (response.ok) location.reload();
         else response.json().then(e => alert(getApiError(e, 'Error rejecting repair')));
-    });
-}
-
-function deleteRepair(repairId) {
-    if (!confirm('Delete this repair request?')) return;
-
-    fetch(`/api/repair-requests/${repairId}/`, {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') }
-    })
-    .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error deleting repair')));
     });
 }
 

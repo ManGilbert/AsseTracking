@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Profile Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0"><i class="feather-user me-2"></i>Profile Details</h1>
+            <p class="text-muted mb-0">View and update your profile information.</p>
+        </div>
+    </div>
+    <div class="card">
+        <form method="post" class="card-body">
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Username</label>
+                    <input class="form-control" name="username" value="{{ request.user.username }}" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Email</label>
+                    <input class="form-control" type="email" name="email" value="{{ request.user.email }}" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Role</label>
+                    <input class="form-control" value="{{ request.user.get_role_display }}" disabled>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Employee ID</label>
+                    <input class="form-control" value="{{ employee.employee_id|default:'-' }}" disabled>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Full Name</label>
+                    <input class="form-control" name="full_name" value="{{ employee.full_name|default:'' }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Position</label>
+                    <input class="form-control" name="position" value="{{ employee.position|default:'' }}">
+                </div>
+            </div>
+            <div class="d-flex justify-content-end mt-4">
+                <button class="btn btn-primary" type="submit">Save Profile</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

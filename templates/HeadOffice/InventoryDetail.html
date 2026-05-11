@@ -84,7 +84,9 @@
                             <td class="text-end">
                                 <button class="btn btn-sm btn-outline-success" onclick="markInventoryItem({{ item.id }}, 'mark_verified')">Verified</button>
                                 <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_missing')">Missing</button>
-                                <button class="btn btn-sm btn-outline-info" onclick="markInventoryItem({{ item.id }}, 'mark_extra')">Extra</button>
+                                <button class="btn btn-sm btn-outline-info" onclick="markInventoryItem({{ item.id }}, 'mark_extra')">Register Found Device</button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="markInventoryItem({{ item.id }}, 'mark_in_repair')">In Repair</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="markInventoryItem({{ item.id }}, 'return_head_office')">Returned to Head Office</button>
                             </td>
                         </tr>
                     {% empty %}

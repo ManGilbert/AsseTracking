@@ -69,12 +69,12 @@
                             <thead class="table-light">
                                 <tr>
                                     <th scope="col">Name</th>
+                                    <th scope="col">Employee ID</th>
                                     <th scope="col">Position</th>
                                     <th scope="col">Branch</th>
                                     <th scope="col">Department</th>
                                     <th scope="col">Assigned Devices</th>
                                     <th scope="col">Status</th>
-                                    <th scope="col">Hire Date</th>
                                     <th scope="col" class="text-end">Actions</th>
                                 </tr>
                             </thead>
@@ -94,6 +94,7 @@
                                             </div>
                                         </div>
                                     </td>
+                                    <td>{{ employee.employee_id|default:"-" }}</td>
                                     <td>{{ employee.position }}</td>
                                     <td>{{ employee.branch.name }}</td>
                                     <td>{{ employee.department.name|default:"—" }}</td>
@@ -120,15 +121,11 @@
                                             {{ employee.get_status_display }}
                                         </span>
                                     </td>
-                                    <td>{{ employee.hire_date|date:"M d, Y" }}</td>
                                     <td class="text-end">
                                         <div class="hstack gap-1 justify-content-end">
                                             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editEmployeeModal" 
                                                     onclick="loadEmployee({{ employee.id }})">
                                                 <i class="feather-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee({{ employee.id }})">
-                                                <i class="feather-trash-2"></i>
                                             </button>
                                             {% if employee.status != 'EXITED' %}
                                             <button class="btn btn-sm btn-outline-danger" onclick="markEmployeeExited({{ employee.id }})">
@@ -165,9 +162,15 @@
             <form id="createEmployeeForm" method="post" action="/api/employees/" class="modal-body">
                 <div class="row mb-3">
                     <div class="col-md-6">
+                        <label class="form-label">Employee ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="employeeCode" required>
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label">Full Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="fullName" required>
                     </div>
+                </div>
+                <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label">Position <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="position" required>
@@ -191,10 +194,6 @@
                     </div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Hire Date <span class="text-danger">*</span></label>
-                        <input type="date" class="form-control" id="hireDate" required>
-                    </div>
                     <div class="col-md-6">
                         <label class="form-label">Role <span class="text-danger">*</span></label>
                         <select class="form-select" id="loginRole" required>
@@ -235,9 +234,15 @@
                 <input type="hidden" id="editEmployeeId">
                 <div class="row mb-3">
                     <div class="col-md-6">
+                        <label class="form-label">Employee ID</label>
+                        <input type="text" class="form-control" id="editEmployeeCode" required>
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label">Full Name</label>
                         <input type="text" class="form-control" id="editFullName" required>
                     </div>
+                </div>
+                <div class="row mb-3">
                     <div class="col-md-6">
                         <label class="form-label">Position</label>
                         <input type="text" class="form-control" id="editPosition" required>
@@ -267,10 +272,6 @@
                             <option value="{{ status }}">{{ label }}</option>
                             {% endfor %}
                         </select>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Hire Date</label>
-                        <input type="date" class="form-control" id="editHireDate" required>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -344,11 +345,11 @@ function loadEmployee(employeeId) {
         .then(response => response.json())
         .then(data => {
             document.getElementById('editEmployeeId').value = data.id;
+            document.getElementById('editEmployeeCode').value = data.employee_id || '';
             document.getElementById('editFullName').value = data.full_name;
             document.getElementById('editPosition').value = data.position;
             document.getElementById('editBranchId').value = data.branch;
             document.getElementById('editStatus').value = data.status;
-            document.getElementById('editHireDate').value = data.hire_date;
             
             // Load departments for the branch
             loadDepartments(data.branch, 'editDepartmentId');
@@ -366,10 +367,10 @@ function submitEmployeeForm(employeeId) {
     
     const data = {
         full_name: document.getElementById(employeeId ? 'editFullName' : 'fullName').value,
+        employee_id: document.getElementById(employeeId ? 'editEmployeeCode' : 'employeeCode').value,
         position: document.getElementById(employeeId ? 'editPosition' : 'position').value,
         branch: parseInt(document.getElementById(employeeId ? 'editBranchId' : 'branchId').value) || null,
         department: parseInt(document.getElementById(employeeId ? 'editDepartmentId' : 'departmentId').value) || null,
-        hire_date: document.getElementById(employeeId ? 'editHireDate' : 'hireDate').value,
     };
     
     if (!employeeId) {
@@ -392,9 +393,9 @@ function submitEmployeeForm(employeeId) {
         if (response.ok) {
             return response.json().then(data => {
                 if (!employeeId && data.generated_username) {
-                    alert(`Employee created successfully.\n\nUsername: ${data.generated_username}\nEmail: ${data.generated_email}\nDefault Password: ${data.default_password}`);
+                    showAppMessage(`Employee account created successfully.\n\nUsername: ${data.generated_username}\nEmail: ${data.generated_email}\nPassword: ${data.default_password}`, 'Success', 'success');
                 }
-                location.reload();
+                setTimeout(() => location.reload(), 600);
             });
         } else {
             response.json().then(e => alert(getApiError(e, 'Error saving employee')));
@@ -419,19 +420,6 @@ function markEmployeeExited(employeeId) {
     .then(data => {
         alert(data.message);
         location.reload();
-    });
-}
-
-function deleteEmployee(employeeId) {
-    if (!confirm('Delete this employee and their login account?')) return;
-
-    fetch(`/api/employees/${employeeId}/`, {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') }
-    })
-    .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error deleting employee')));
     });
 }
 

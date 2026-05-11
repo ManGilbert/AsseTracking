@@ -37,7 +37,7 @@
                             <td class="text-end">
                                 <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#startRepairModal"
                                         onclick="prepareStartRepair({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
-                                    <i class="feather-play me-1"></i>Start
+                                    <i class="feather-check-circle me-1"></i>Received
                                 </button>
                             </td>
                         </tr>
@@ -55,7 +55,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Start Repair</h5>
+                <h5 class="modal-title">Receive Repair</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="startRepairForm" class="modal-body">
@@ -66,12 +66,20 @@
                     <textarea class="form-control" id="startNotes" rows="3"></textarea>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Parts or Materials</label>
+                    <label class="form-label">Parts or Materials Used</label>
                     <textarea class="form-control" id="startParts" rows="2"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Work Start Date</label>
+                    <input type="datetime-local" class="form-control" id="workStartDate">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Repair Completion Date</label>
+                    <input type="datetime-local" class="form-control" id="completionDate">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Start Repair</button>
+                    <button type="submit" class="btn btn-primary">Received</button>
                 </div>
             </form>
         </div>
@@ -93,6 +101,8 @@ document.getElementById('startRepairForm').addEventListener('submit', function(e
         body: JSON.stringify({
             notes: document.getElementById('startNotes').value,
             parts_used: document.getElementById('startParts').value,
+            work_start_date: document.getElementById('workStartDate').value,
+            completion_date: document.getElementById('completionDate').value,
         })
     }).then(response => {
         if (response.ok) location.href = "{% url 'technician_in_progress_repairs' %}";

@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.shortcuts import redirect
 from django.utils import timezone
+from django.urls import reverse
 
 
 class InactiveUserAndSessionTimeoutMiddleware:
@@ -22,6 +23,17 @@ class InactiveUserAndSessionTimeoutMiddleware:
                     "Your account has been deactivated. Please contact the administrator.",
                 )
                 return redirect(settings.LOGIN_URL)
+
+            allowed_paths = {
+                reverse("first_login_password_change"),
+                reverse("logout"),
+            }
+            if (
+                getattr(user, "must_change_password", False)
+                and request.path not in allowed_paths
+                and not request.path.startswith("/static/")
+            ):
+                return redirect("first_login_password_change")
 
             now = timezone.now()
             last_activity = request.session.get("last_activity_at")

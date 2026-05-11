@@ -16,7 +16,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -160,6 +160,8 @@ class BranchViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         branch = serializer.save()
+        for name in Department.objects.values_list("name", flat=True).distinct():
+            Department.objects.get_or_create(branch=branch, name=name)
         AuditService.log_action(
             self.request.user,
             "BRANCH_CREATED",
@@ -220,7 +222,17 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        department = serializer.save()
+        requested_branch = serializer.validated_data.get("branch")
+        name = serializer.validated_data["name"].strip()
+        if requested_branch:
+            department, _ = Department.objects.get_or_create(
+                branch=requested_branch,
+                name=name,
+            )
+        else:
+            department = None
+        for branch in Branch.objects.all():
+            department, _ = Department.objects.get_or_create(branch=branch, name=name)
         AuditService.log_action(
             self.request.user,
             "DEPARTMENT_CREATED",
@@ -229,16 +241,26 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             f"Department: {department.name}",
         )
 
-    def perform_destroy(self, instance):
-        department_id = instance.id
-        department_name = instance.name
-        instance.delete()
-        AuditService.log_action(
-            self.request.user,
-            "DEPARTMENT_DELETED",
-            "Department",
-            department_id,
-            f"Department: {department_name}",
+    def create(self, request, *args, **kwargs):
+        name = request.data.get("name", "").strip()
+        if not name:
+            return Response({"name": "Department name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        first_branch = Branch.objects.first()
+        if not first_branch:
+            return Response({"error": "Create a branch before registering departments."}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data.copy()
+        data["name"] = name
+        data["branch"] = data.get("branch") or first_branch.id
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        department = Department.objects.filter(name=name).order_by("id").first()
+        return Response(self.get_serializer(department).data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {"error": "Departments cannot be deleted from the system interface."},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
         )
 
 
@@ -747,10 +769,12 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], permission_classes=[CanUpdateRepair])
     def start_repair(self, request, pk=None):
-        """Start an approved repair request."""
+        """Receive an approved repair request into technician work."""
         repair_request = self.get_object()
         notes = request.data.get("notes", "")
         parts_used = request.data.get("parts_used", "")
+        work_start_date = parse_datetime(request.data.get("work_start_date", "")) if request.data.get("work_start_date") else None
+        completion_date = parse_datetime(request.data.get("completion_date", "")) if request.data.get("completion_date") else None
 
         try:
             repair_log = RepairService.start_repair(
@@ -758,6 +782,8 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
                 request.user,
                 notes,
                 parts_used,
+                work_start_date,
+                completion_date,
             )
             return Response(RepairLogSerializer(repair_log).data, status=status.HTTP_200_OK)
         except ValueError as e:
@@ -922,7 +948,7 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             "close",
         ]:
             if self.action == "approve_branch":
-                return [CanVerifyInventory()]
+                return [IsBranchManager()]
             return [CanCreateInventorySession()]
         return [IsAuthenticated()]
 
@@ -1050,10 +1076,12 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             "mark_verified",
             "mark_missing",
             "mark_extra",
+            "mark_in_repair",
+            "return_head_office",
             "update",
             "partial_update",
         ]:
-            return [CanVerifyInventory()]
+            return [IsHeadOffice()]
         return [IsAuthenticated()]
 
     @action(
@@ -1127,6 +1155,47 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             "InventoryItem",
             item.id,
             f"Device {item.device.company_tag} marked extra",
+        )
+        return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
+    def mark_in_repair(self, request, pk=None):
+        item = self.get_object()
+        comment = request.data.get("comment", "")
+        item.status = "IN_REPAIR"
+        item.comment = comment
+        item.device.status = "IN_REPAIR"
+        item.device.save(update_fields=["status"])
+        item.save(update_fields=["status", "comment"])
+        AuditService.log_action(
+            request.user,
+            "INVENTORY_IN_REPAIR",
+            "InventoryItem",
+            item.id,
+            f"Device {item.device.company_tag} marked in repair",
+        )
+        return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
+    def return_head_office(self, request, pk=None):
+        item = self.get_object()
+        comment = request.data.get("comment", "")
+        device = item.device
+        item.status = "RETURNED_HEAD_OFFICE"
+        item.comment = comment
+        device.status = "AVAILABLE"
+        device.assigned_employee = None
+        device.assigned_branch = None
+        device.location_type = "HEAD_OFFICE"
+        device.current_location = "Head Office"
+        device.save()
+        item.save(update_fields=["status", "comment"])
+        AuditService.log_action(
+            request.user,
+            "INVENTORY_RETURNED_HEAD_OFFICE",
+            "InventoryItem",
+            item.id,
+            f"Device {device.company_tag} returned to Head Office inventory",
         )
         return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
 
@@ -1286,6 +1355,75 @@ def logout_view(request):
 @login_required
 def dashboard_redirect(request):
     return redirect(_get_dashboard_url(request.user.role))
+
+
+@login_required
+def profile_details(request):
+    employee = _employee_for_user(request.user)
+    if request.method == "POST":
+        request.user.email = request.POST.get("email", request.user.email).strip()
+        request.user.username = request.POST.get("username", request.user.username).strip()
+        request.user.save(update_fields=["username", "email"])
+        if employee:
+            employee.full_name = request.POST.get("full_name", employee.full_name).strip()
+            employee.position = request.POST.get("position", employee.position).strip()
+            employee.save(update_fields=["full_name", "position"])
+        messages.success(request, "Profile updated successfully.")
+        return redirect("profile_details")
+    return render(request, "ProfileDetails.html", {"employee": employee})
+
+
+@login_required
+def account_settings(request):
+    if request.method == "POST":
+        current_password = request.POST.get("current_password", "")
+        new_password = request.POST.get("new_password", "")
+        confirm_password = request.POST.get("confirm_password", "")
+        request.user.username = request.POST.get("username", request.user.username).strip()
+        request.user.email = request.POST.get("email", request.user.email).strip()
+        password_changed = False
+        if new_password or confirm_password:
+            if not request.user.check_password(current_password):
+                messages.error(request, "Current password is incorrect.")
+                return redirect("account_settings")
+            if new_password != confirm_password:
+                messages.error(request, "New password and confirm password must match.")
+                return redirect("account_settings")
+            request.user.set_password(new_password)
+            request.user.must_change_password = False
+            password_changed = True
+        request.user.save()
+        if password_changed:
+            logout(request)
+            messages.success(request, "Password changed successfully. Please login again using your new password.")
+            return redirect("login")
+        messages.success(request, "Account settings updated successfully.")
+        return redirect("account_settings")
+    return render(request, "AccountSettings.html")
+
+
+@login_required
+def first_login_password_change(request):
+    if not request.user.must_change_password:
+        return redirect("dashboard_redirect")
+    if request.method == "POST":
+        current_password = request.POST.get("current_password", "")
+        new_password = request.POST.get("new_password", "")
+        confirm_password = request.POST.get("confirm_password", "")
+        if not request.user.check_password(current_password):
+            messages.error(request, "Current password is incorrect.")
+        elif new_password != confirm_password:
+            messages.error(request, "New password and confirm password must match.")
+        elif request.user.check_password(new_password):
+            messages.error(request, "The new password cannot be the same as the default password.")
+        else:
+            request.user.set_password(new_password)
+            request.user.must_change_password = False
+            request.user.save(update_fields=["password", "must_change_password"])
+            logout(request)
+            messages.success(request, "Password changed successfully. Please login again using your new password.")
+            return redirect("login")
+    return render(request, "FirstLoginPasswordChange.html")
 
 
 @login_required
@@ -1496,6 +1634,12 @@ def employee_my_devices(request):
 def employee_request_repair(request):
     employee = _employee_for_user(request.user)
     devices = Device.objects.filter(assigned_employee=employee).exclude(status__in=["RETIRED", "MISSING"]) if employee else Device.objects.none()
+    if employee:
+        open_device_ids = RepairRequest.objects.filter(
+            employee=employee,
+            status__in=["PENDING", "APPROVED", "IN_PROGRESS"],
+        ).values_list("device_id", flat=True)
+        devices = devices.exclude(id__in=open_device_ids)
     return render(request, "Employee/RequestRepair.html", {"employee": employee, "devices": devices})
 
 
@@ -1547,6 +1691,25 @@ def head_office_branches(request):
         'branches': branches,
     }
     return render(request, "HeadOffice/Branches.html", context)
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_departments(request):
+    """Global department registration view."""
+    department_names = (
+        Department.objects.values("name")
+        .annotate(branch_count=Count("branch", distinct=True))
+        .order_by("name")
+    )
+    return render(
+        request,
+        "HeadOffice/Departments.html",
+        {
+            "department_names": department_names,
+            "branch_count": Branch.objects.count(),
+        },
+    )
 
 
 @login_required
@@ -1642,10 +1805,36 @@ def head_office_inventory(request):
     ).prefetch_related('items', 'items__device', 'items__device__assigned_employee').all().order_by('-start_date')
     
     branches = Branch.objects.all()
+    departments = Department.objects.values("name").distinct().order_by("name")
+    devices_by_department = []
+    all_devices = Device.objects.select_related("assigned_employee", "assigned_branch").order_by("company_tag")
+    for department in departments:
+        name = department["name"]
+        devices_by_department.append(
+            {
+                "name": name,
+                "devices": all_devices.filter(assigned_employee__department__name=name),
+            }
+        )
+    devices_by_department.append(
+        {
+            "name": "Unassigned / Head Office",
+            "devices": all_devices.filter(assigned_employee__isnull=True),
+        }
+    )
+    latest_session = inventory_sessions.first()
+    report_items = latest_session.items.all() if latest_session else InventoryItem.objects.none()
     
     context = {
         'inventory_sessions': inventory_sessions,
         'branches': branches,
+        'devices_by_department': devices_by_department,
+        'latest_session': latest_session,
+        'report_total': report_items.count(),
+        'report_verified': report_items.filter(status="VERIFIED").count(),
+        'report_missing': report_items.filter(status="MISSING").count(),
+        'report_repair': report_items.filter(status="IN_REPAIR").count(),
+        'report_returned': report_items.filter(status="RETURNED_HEAD_OFFICE").count(),
     }
     return render(request, "HeadOffice/Inventory.html", context)
 

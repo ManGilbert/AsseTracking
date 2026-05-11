@@ -88,7 +88,6 @@
                                     <th>Status</th>
                                     <th>Assigned To</th>
                                     <th>Branch</th>
-                                    <th>Purchase Date</th>
                                     <th class="text-end">Actions</th>
                                 </tr>
                             </thead>
@@ -138,15 +137,12 @@
                                                     onclick="viewDeviceDetails({{ device.id }})">
                                                 <i class="feather-eye"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteDevice({{ device.id }})">
-                                                <i class="feather-trash-2"></i>
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="8" class="text-center text-muted py-4">
+                                    <td colspan="7" class="text-center text-muted py-4">
                                         No devices found
                                     </td>
                                 </tr>
@@ -194,16 +190,8 @@
                         <label class="form-label">Company Tag (QR/Barcode) <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="companyTag" required>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Purchase Date</label>
-                        <input type="date" class="form-control" id="purchaseDate">
-                    </div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Warranty Expiry</label>
-                        <input type="date" class="form-control" id="warrantyExpiry">
-                    </div>
                     <div class="col-md-6">
                         <label class="form-label">Initial Location</label>
                         <select class="form-select" id="locationBranch">
@@ -269,16 +257,6 @@
                             <option value="{{ status }}">{{ label }}</option>
                             {% endfor %}
                         </select>
-                    </div>
-                </div>
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Purchase Date</label>
-                        <input type="date" class="form-control" id="editPurchaseDate">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Warranty Expiry</label>
-                        <input type="date" class="form-control" id="editWarrantyExpiry">
                     </div>
                 </div>
                 <div class="row mb-3">
@@ -362,8 +340,6 @@ function loadDevice(deviceId) {
             document.getElementById('editSerialNumber').value = data.serial_number;
             document.getElementById('editCompanyTag').value = data.company_tag;
             document.getElementById('editStatus').value = data.status;
-            document.getElementById('editPurchaseDate').value = data.purchase_date || '';
-            document.getElementById('editWarrantyExpiry').value = data.warranty_expiry || '';
             document.getElementById('editAssignedBranch').value = data.assigned_branch || '';
             document.getElementById('editAssignedEmployee').value = data.assigned_employee || '';
             document.getElementById('editLocationType').value = data.location_type;
@@ -389,8 +365,6 @@ function viewDeviceDetails(deviceId) {
                 ['Assigned Branch', data.assigned_branch_name],
                 ['Location Type', data.location_type],
                 ['Current Location', data.current_location],
-                ['Purchase Date', data.purchase_date],
-                ['Warranty Expiry', data.warranty_expiry],
                 ['Days Assigned', data.days_assigned],
                 ['Condition Notes', data.condition_notes],
             ];
@@ -427,8 +401,6 @@ document.getElementById('createDeviceForm').addEventListener('submit', function(
         model: document.getElementById('model').value,
         serial_number: document.getElementById('serialNumber').value,
         company_tag: document.getElementById('companyTag').value,
-        purchase_date: document.getElementById('purchaseDate').value || null,
-        warranty_expiry: document.getElementById('warrantyExpiry').value || null,
         condition_notes: document.getElementById('conditionNotes').value,
         assigned_branch: parseInt(document.getElementById('locationBranch').value) || null,
         location_type: document.getElementById('locationBranch').value ? 'BRANCH' : 'HEAD_OFFICE',
@@ -458,8 +430,6 @@ document.getElementById('editDeviceForm').addEventListener('submit', function(e)
         model: document.getElementById('editModel').value,
         serial_number: document.getElementById('editSerialNumber').value,
         company_tag: document.getElementById('editCompanyTag').value,
-        purchase_date: document.getElementById('editPurchaseDate').value || null,
-        warranty_expiry: document.getElementById('editWarrantyExpiry').value || null,
         status: document.getElementById('editStatus').value,
         assigned_branch: parseInt(document.getElementById('editAssignedBranch').value) || null,
         assigned_employee: parseInt(document.getElementById('editAssignedEmployee').value) || null,
@@ -481,19 +451,6 @@ document.getElementById('editDeviceForm').addEventListener('submit', function(e)
         else response.json().then(e => alert(getApiError(e, 'Error updating device')));
     });
 });
-
-function deleteDevice(deviceId) {
-    if (!confirm('Delete this device? Devices with activity/history cannot be deleted.')) return;
-
-    fetch(`/api/devices/${deviceId}/`, {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') }
-    })
-    .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error deleting device')));
-    });
-}
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;

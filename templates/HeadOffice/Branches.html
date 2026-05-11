@@ -10,8 +10,8 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h1 class="h3 mb-0"><i class="feather-map me-2"></i>Branch & Department Management</h1>
-                    <p class="text-muted mb-0">Manage branches and departments across all locations</p>
+                    <h1 class="h3 mb-0"><i class="feather-map me-2"></i>Branch Management</h1>
+                    <p class="text-muted mb-0">Manage branches across all locations</p>
                 </div>
                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createBranchModal">
                     <i class="feather-plus me-1"></i>New Branch
@@ -75,9 +75,6 @@
                                             <button class="btn btn-sm btn-outline-secondary" onclick="expandBranchDetails({{ branch.id }})">
                                                 <i class="feather-chevron-down"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteBranch({{ branch.id }})">
-                                                <i class="feather-trash-2"></i>
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -91,18 +88,11 @@
                                                         {% for dept in branch.departments.all %}
                                                         <div class="list-group-item d-flex justify-content-between">
                                                             <span>{{ dept.name }}</span>
-                                                            <button class="btn btn-xs btn-outline-danger" onclick="deleteDepartment({{ dept.id }})">
-                                                                <i class="feather-x"></i>
-                                                            </button>
                                                         </div>
                                                         {% empty %}
                                                         <p class="text-muted small">No departments</p>
                                                         {% endfor %}
                                                     </div>
-                                                    <button class="btn btn-sm btn-outline-success mt-2" data-bs-toggle="modal" data-bs-target="#createDepartmentModal"
-                                                            onclick="setCurrentBranch({{ branch.id }})">
-                                                        <i class="feather-plus me-1"></i>Add Department
-                                                    </button>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <h6 class="mb-3">Employees</h6>
@@ -203,29 +193,6 @@
     </div>
 </div>
 
-<!-- Create Department Modal -->
-<div class="modal fade" id="createDepartmentModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Create New Department</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form id="createDepartmentForm" class="modal-body">
-                <input type="hidden" id="departmentBranchId">
-                <div class="mb-3">
-                    <label class="form-label">Department Name <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="departmentName" required>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create Department</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <script>
 function expandBranchDetails(branchId) {
     const element = document.getElementById(`branch-details-${branchId}`);
@@ -233,10 +200,6 @@ function expandBranchDetails(branchId) {
     element.dataset.expanded = isExpanded ? 'true' : 'false';
     element.hidden = !isExpanded;
     element.style.display = isExpanded ? 'table-row' : 'none';
-}
-
-function setCurrentBranch(branchId) {
-    document.getElementById('departmentBranchId').value = branchId;
 }
 
 function loadBranch(branchId) {
@@ -291,53 +254,6 @@ document.getElementById('editBranchForm').addEventListener('submit', function(e)
         else response.json().then(e => alert(getApiError(e, 'Error updating branch')));
     });
 });
-
-document.getElementById('createDepartmentForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const data = {
-        name: document.getElementById('departmentName').value,
-        branch: parseInt(document.getElementById('departmentBranchId').value),
-    };
-    
-    fetch('/api/departments/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify(data)
-    })
-    .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error creating department')));
-    });
-});
-
-function deleteBranch(branchId) {
-    if (!confirm('Delete this branch? Departments will be removed and linked employees/devices will be unassigned.')) return;
-
-    fetch(`/api/branches/${branchId}/`, {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') }
-    })
-    .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error deleting branch')));
-    });
-}
-
-function deleteDepartment(departmentId) {
-    if (!confirm('Delete this department?')) return;
-    
-    fetch(`/api/departments/${departmentId}/`, {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') }
-    })
-    .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error deleting department')));
-    });
-}
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;

@@ -202,6 +202,14 @@ class RepairService:
                 "Employee can only request repair for assigned devices"
             )
 
+        if RepairRequest.objects.filter(
+            device=device,
+            status__in=["PENDING", "APPROVED", "IN_PROGRESS"],
+        ).exists():
+            raise ValueError(
+                "This device already has an unfinished repair request."
+            )
+
         with transaction.atomic():
             repair_request = RepairRequest.objects.create(
                 device=device,
@@ -294,7 +302,14 @@ class RepairService:
             return repair_request
 
     @staticmethod
-    def start_repair(repair_request_id, technician_user, notes=None, parts_used=None):
+    def start_repair(
+        repair_request_id,
+        technician_user,
+        notes=None,
+        parts_used=None,
+        start_date=None,
+        completed_date=None,
+    ):
         """
         Start work on an approved repair request.
 
@@ -314,6 +329,8 @@ class RepairService:
                     "technician": technician_user,
                     "notes": notes or "",
                     "parts_used": parts_used or "",
+                    "start_date": start_date or timezone.now(),
+                    "completed_date": completed_date,
                 },
             )
 
@@ -323,6 +340,8 @@ class RepairService:
                     repair_log.notes = notes
                 if parts_used is not None:
                     repair_log.parts_used = parts_used
+                repair_log.start_date = start_date or repair_log.start_date
+                repair_log.completed_date = completed_date or repair_log.completed_date
                 repair_log.save()
 
             repair_request.status = "IN_PROGRESS"

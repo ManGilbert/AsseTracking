@@ -126,6 +126,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "id",
             "user",
             "user_username",
+            "employee_id",
             "full_name",
             "position",
             "branch",
@@ -195,6 +196,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
                 password=DEFAULT_EMPLOYEE_PASSWORD,
                 role=login_role,
             )
+            user.must_change_password = True
+            user.save(update_fields=["must_change_password"])
             validated_data["user"] = user
             created_user = True
 

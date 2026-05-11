@@ -153,11 +153,7 @@
                                         {{ assignment.returned_date|timeuntil:assignment.assigned_date }}
                                         {% endif %}
                                     </td>
-                                    <td class="text-end">
-                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteAssignment({{ assignment.id }})">
-                                            <i class="feather-trash-2"></i>
-                                        </button>
-                                    </td>
+                                    <td class="text-end text-muted">-</td>
                                 </tr>
                                 {% empty %}
                                 <tr>
@@ -374,19 +370,6 @@ function loadAssignment(assignmentId) {
             document.getElementById('deviceTagDisplay').textContent = data.device_info ? data.device_info.company_tag : data.device;
             document.getElementById('employeeNameDisplay').textContent = data.employee_name || data.employee;
         });
-}
-
-function deleteAssignment(assignmentId) {
-    if (!confirm('Delete this assignment record? Active assignment devices will be returned to available.')) return;
-
-    fetch(`/api/assignments/${assignmentId}/`, {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCookie('csrftoken') }
-    })
-    .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error deleting assignment')));
-    });
 }
 
 function getCookie(name) {

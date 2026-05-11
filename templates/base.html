@@ -58,7 +58,7 @@
                                 <ul class="nxl-submenu">
                                     <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_employees' %}">Employee</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_branches' %}">Branches</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="#">Departments</a></li>
+                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_departments' %}">Departments</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_devices' %}">Devices</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_assignments' %}">Assignments</a></li>
                                     <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_repairs' %}">Repairs</a></li>
@@ -261,11 +261,11 @@
                                 </div>
                             </div>
                             <div class="dropdown">
-                                <a href="#" class="dropdown-item">
+                                <a href="{% url 'profile_details' %}" class="dropdown-item">
                                     <i class="feather-user"></i>
                                     <span>Profile Details</span>
                                 </a>
-                                <a href="#" class="dropdown-item">
+                                <a href="{% url 'account_settings' %}" class="dropdown-item">
                                     <i class="feather-settings"></i>
                                     <span>Account Settings</span>
                                 </a>
@@ -552,6 +552,21 @@
         </div>
     </div>
 
+    <div class="modal fade" id="appMessageModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="appMessageTitle">Message</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="appMessageBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="{% static 'assets/vendors/js/vendors.min.js' %}"></script>
     <script src="{% static 'assets/vendors/js/daterangepicker.min.js' %}"></script>
     <script src="{% static 'assets/vendors/js/apexcharts.min.js' %}"></script>
@@ -561,6 +576,33 @@
     <script src="{% static 'assets/js/theme-customizer-init.min.js' %}"></script>
     <script src="{% static 'assets/js/assetrack/table-search.js' %}"></script>
     <script type="module" src="{% static 'assets/js/assetrack/layout-session.js' %}"></script>
+    <script>
+        (function () {
+            const nativeAlert = window.alert.bind(window);
+            window.showAppMessage = function (message, title = 'Message', type = 'info') {
+                if (window.Swal) {
+                    return Swal.fire({title, text: String(message), icon: type});
+                }
+                const modalElement = document.getElementById('appMessageModal');
+                if (!modalElement || !window.bootstrap) {
+                    nativeAlert(message);
+                    return Promise.resolve();
+                }
+                document.getElementById('appMessageTitle').textContent = title;
+                document.getElementById('appMessageBody').innerHTML = String(message).replaceAll('\n', '<br>');
+                bootstrap.Modal.getOrCreateInstance(modalElement).show();
+                return Promise.resolve();
+            };
+            window.alert = function (message) {
+                window.showAppMessage(message, 'Message', 'info');
+            };
+            {% if messages %}
+                {% for message in messages %}
+                    window.showAppMessage('{{ message|escapejs }}', '{{ message.tags|title|default:"Message" }}', '{{ message.tags|default:"info" }}');
+                {% endfor %}
+            {% endif %}
+        })();
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 

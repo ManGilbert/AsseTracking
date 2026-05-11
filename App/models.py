@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 
 # =========================
@@ -50,6 +51,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    must_change_password = models.BooleanField(default=False)
 
     date_joined = models.DateTimeField(auto_now_add=True)
 
@@ -109,6 +111,7 @@ class Employee(models.Model):
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
 
+    employee_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     full_name = models.CharField(max_length=255)
     position = models.CharField(max_length=255)
 
@@ -117,7 +120,7 @@ class Employee(models.Model):
 
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='ACTIVE')
 
-    hire_date = models.DateField()
+    hire_date = models.DateField(null=True, blank=True)
     exit_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
@@ -252,7 +255,7 @@ class RepairLog(models.Model):
     notes = models.TextField()
     parts_used = models.TextField(blank=True)
 
-    start_date = models.DateTimeField(auto_now_add=True)
+    start_date = models.DateTimeField(default=timezone.now)
     completed_date = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
@@ -285,12 +288,14 @@ class InventoryItem(models.Model):
         ('VERIFIED', 'Verified'),
         ('MISSING', 'Missing'),
         ('EXTRA', 'Extra'),
+        ('IN_REPAIR', 'In Repair'),
+        ('RETURNED_HEAD_OFFICE', 'Returned to Head Office'),
     ]
 
     session = models.ForeignKey(InventorySession, on_delete=models.CASCADE, related_name='items')
     device = models.ForeignKey(Device, on_delete=models.CASCADE)
 
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES)
     comment = models.TextField(blank=True)
 
     class Meta:
