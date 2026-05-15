@@ -30,11 +30,6 @@
                         <p class="fs-12 fw-medium text-muted">AsseTracking</p>
                         <form method="post" action="{% url 'login' %}" class="w-100 mt-4 pt-2">
                             {% csrf_token %}
-                            {% if messages %}
-                                {% for message in messages %}
-                                    <div class="alert alert-danger" role="alert">{{ message }}</div>
-                                {% endfor %}
-                            {% endif %}
                             <div class="mb-4">
                                 <input type="text" name="username" class="form-control" placeholder="Username or Email" value="{{ username|default:'' }}" required>
                             </div>
@@ -76,9 +71,40 @@
         </div>
     </main>   
 
+    <div class="modal fade" id="loginMessageModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="loginMessageTitle">Message</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="loginMessageBody"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="{% static 'assets/vendors/js/vendors.min.js' %}"></script>
     <script src="{% static 'assets/js/common-init.min.js' %}"></script>
     <script src="{% static 'assets/js/theme-customizer-init.min.js' %}"></script>
+    <script>
+        function showLoginMessage(message, title, type) {
+            const modalElement = document.getElementById('loginMessageModal');
+            document.getElementById('loginMessageTitle').textContent = title || 'Message';
+            document.getElementById('loginMessageBody').textContent = message;
+            const button = modalElement.querySelector('.modal-footer .btn');
+            button.className = `btn btn-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'}`;
+            bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        }
+
+        {% if messages %}
+            {% for message in messages %}
+                showLoginMessage('{{ message|escapejs }}', '{{ message.tags|title|default:"Message" }}', '{{ message.tags|default:"info" }}');
+            {% endfor %}
+        {% endif %}
+    </script>
 </body>
 
 </html>

@@ -285,6 +285,7 @@ class InventorySession(models.Model):
 # =========================
 class InventoryItem(models.Model):
     STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
         ('VERIFIED', 'Verified'),
         ('MISSING', 'Missing'),
         ('EXTRA', 'Extra'),
@@ -295,7 +296,7 @@ class InventoryItem(models.Model):
     session = models.ForeignKey(InventorySession, on_delete=models.CASCADE, related_name='items')
     device = models.ForeignKey(Device, on_delete=models.CASCADE)
 
-    status = models.CharField(max_length=30, choices=STATUS_CHOICES)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='PENDING')
     comment = models.TextField(blank=True)
 
     class Meta:

@@ -75,8 +75,8 @@ document.getElementById('requestRepairForm').addEventListener('submit', function
             issue_description: document.getElementById('issueDescription').value,
         })
     }).then(response => {
-        if (response.ok) location.href = "{% url 'employee_repair_requests' %}";
-        else response.json().then(e => alert(getApiError(e, 'Error creating repair request')));
+        if (response.ok) showAppMessage('Repair request submitted successfully.', 'Success', 'success').then(() => location.href = "{% url 'employee_repair_requests' %}");
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error creating repair request'), 'Error', 'error'));
     });
 });
 function getCookie(name) {

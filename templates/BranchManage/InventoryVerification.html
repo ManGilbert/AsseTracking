@@ -58,7 +58,7 @@ async function approveBranchInventory(sessionId) {
         method: 'POST',
         headers: {'X-CSRFToken': getCookie('csrftoken')}
     }).then(response => {
-        if (response.ok) location.reload();
+        if (response.ok) showAppMessage('Branch inventory approved successfully.', 'Success', 'success').then(() => location.reload());
         else response.json().then(e => showAppMessage(getApiError(e, 'Error approving branch inventory'), 'Error', 'error'));
     });
 }

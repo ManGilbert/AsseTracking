@@ -27,20 +27,50 @@
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
-                        <tr><th>Name</th><th>Available Branches</th></tr>
+                        <tr><th>Name</th><th>Available Branches</th><th class="text-end">Actions</th></tr>
                     </thead>
                     <tbody>
                     {% for department in department_names %}
                         <tr>
                             <td><strong>{{ department.name }}</strong></td>
                             <td>{{ department.branch_count }} of {{ branch_count }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editDepartmentModal" onclick="openEditDepartmentModal({{ department.first_id }}, '{{ department.name|escapejs }}')" title="Edit department">
+                                    <i class="feather-edit"></i>
+                                </button>
+                            </td>
                         </tr>
                     {% empty %}
-                        <tr><td colspan="2" class="text-center text-muted py-4">No departments registered.</td></tr>
+                        <tr><td colspan="3" class="text-center text-muted py-4">No departments registered.</td></tr>
                     {% endfor %}
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editDepartmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Department</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editDepartmentForm" class="modal-body">
+                <input type="hidden" id="editDepartmentId">
+                <div class="mb-3">
+                    <label class="form-label">Department Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="editDepartmentName" required>
+                </div>
+                <div class="alert alert-info mb-0">
+                    This update will rename the department across all branches.
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Department</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -84,6 +114,27 @@ document.getElementById('createDepartmentForm').addEventListener('submit', funct
         }
     });
 });
+
+document.getElementById('editDepartmentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const departmentId = document.getElementById('editDepartmentId').value;
+    fetch(`/api/departments/${departmentId}/`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({name: document.getElementById('editDepartmentName').value})
+    }).then(response => {
+        if (response.ok) {
+            showAppMessage('Department updated successfully.', 'Success', 'success').then(() => location.reload());
+        } else {
+            response.json().then(e => showAppMessage(getApiError(e, 'Error updating department'), 'Error', 'error'));
+        }
+    });
+});
+
+function openEditDepartmentModal(departmentId, name) {
+    document.getElementById('editDepartmentId').value = departmentId;
+    document.getElementById('editDepartmentName').value = name;
+}
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);

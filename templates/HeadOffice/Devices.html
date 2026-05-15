@@ -414,8 +414,8 @@ document.getElementById('createDeviceForm').addEventListener('submit', function(
         body: JSON.stringify(data)
     })
     .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error creating device')));
+        if (response.ok) showAppMessage('Device created successfully.', 'Success', 'success').then(() => location.reload());
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error creating device'), 'Error', 'error'));
     });
 });
 
@@ -445,8 +445,8 @@ document.getElementById('editDeviceForm').addEventListener('submit', function(e)
         body: JSON.stringify(data)
     })
     .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error updating device')));
+        if (response.ok) showAppMessage('Device updated successfully.', 'Success', 'success').then(() => location.reload());
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error updating device'), 'Error', 'error'));
     });
 });
 

@@ -50,16 +50,24 @@
         <div class="card-header">
             <div class="d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
                 <h5 class="card-title mb-0">Departments</h5>
-                <div class="input-group" style="max-width: 360px;">
-                    <span class="input-group-text"><i class="feather-search"></i></span>
-                    <input type="search" class="form-control" id="searchInventoryItems" placeholder="Search devices...">
+                <div class="d-flex flex-column flex-md-row gap-2 w-100 justify-content-md-end">
+                    <select class="form-select" id="departmentAuditSelect" style="max-width: 280px;">
+                        <option value="">All departments</option>
+                        {% for group in department_groups %}
+                        <option value="departmentPanel{{ forloop.counter }}">{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="input-group" style="max-width: 360px;">
+                        <span class="input-group-text"><i class="feather-search"></i></span>
+                        <input type="search" class="form-control" id="searchInventoryItems" placeholder="Search devices...">
+                    </div>
                 </div>
             </div>
         </div>
         <div class="card-body">
             <div class="accordion" id="departmentInventoryAccordion">
                 {% for group in department_groups %}
-                <div class="accordion-item">
+                <div class="accordion-item department-audit-group" data-panel-id="departmentPanel{{ forloop.counter }}">
                     <h2 class="accordion-header" id="departmentHeading{{ forloop.counter }}">
                         <button class="accordion-button {% if not forloop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#departmentPanel{{ forloop.counter }}" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}" aria-controls="departmentPanel{{ forloop.counter }}">
                             {{ group.name }} <span class="badge bg-light text-dark ms-2">{{ group.count }}</span>
@@ -141,6 +149,7 @@
                     <div class="mb-3">
                         <label class="form-label">Inventory Action</label>
                         <select class="form-select" id="inventoryAction" required>
+                            <option value="mark_pending">Pending</option>
                             <option value="mark_verified">Verified (Device is OK)</option>
                             <option value="mark_missing">Missing</option>
                             <option value="mark_extra">Register Found Device</option>
@@ -177,6 +186,18 @@ document.querySelectorAll('.inventory-device-row').forEach(row => {
     });
 });
 
+document.getElementById('departmentAuditSelect').addEventListener('change', function() {
+    const selectedPanel = this.value;
+    document.querySelectorAll('.department-audit-group').forEach(group => {
+        const isVisible = !selectedPanel || group.dataset.panelId === selectedPanel;
+        group.hidden = !isVisible;
+        const panel = group.querySelector('.accordion-collapse');
+        if (panel && selectedPanel && isVisible) {
+            bootstrap.Collapse.getOrCreateInstance(panel, {toggle: false}).show();
+        }
+    });
+});
+
 document.getElementById('searchInventoryItems').addEventListener('input', function() {
     const term = this.value.toLowerCase().trim();
     document.querySelectorAll('.inventory-device-row').forEach(row => {
@@ -185,9 +206,18 @@ document.getElementById('searchInventoryItems').addEventListener('input', functi
 });
 
 function openInventoryAction(row) {
+    const statusActionMap = {
+        PENDING: 'mark_pending',
+        VERIFIED: 'mark_verified',
+        MISSING: 'mark_missing',
+        EXTRA: 'mark_extra',
+        IN_REPAIR: 'mark_in_repair',
+        RETURNED_HEAD_OFFICE: 'return_head_office'
+    };
     document.getElementById('inventoryItemId').value = row.dataset.itemId;
     document.getElementById('inventoryDeviceTitle').textContent = `${row.dataset.tag} - ${row.dataset.model}`;
     document.getElementById('inventoryDeviceMeta').textContent = `Serial: ${row.dataset.serial} | Employee: ${row.dataset.employee} | Current status: ${row.dataset.status}`;
+    document.getElementById('inventoryAction').value = statusActionMap[row.dataset.status] || 'mark_pending';
     document.getElementById('inventoryComment').value = row.dataset.comment || '';
     inventoryActionModal.show();
 }
@@ -214,13 +244,13 @@ document.getElementById('inventoryActionForm').addEventListener('submit', functi
 async function approveInventorySession(sessionId) {
     if (!(await showAppConfirm('Complete final Head Office approval for this inventory session?', 'Final Approval'))) return;
     fetch(`/api/inventory-sessions/${sessionId}/approve_head_office/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
-        .then(response => response.ok ? location.reload() : response.json().then(error => showAppMessage(getApiError(error, 'Error approving inventory session'), 'Error', 'error')));
+        .then(response => response.ok ? showAppMessage('Inventory session approved successfully.', 'Success', 'success').then(() => location.reload()) : response.json().then(error => showAppMessage(getApiError(error, 'Error approving inventory session'), 'Error', 'error')));
 }
 
 async function closeInventorySession(sessionId) {
     if (!(await showAppConfirm('Close this inventory session?', 'Close Inventory'))) return;
     fetch(`/api/inventory-sessions/${sessionId}/close/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
-        .then(response => response.ok ? location.reload() : response.json().then(error => showAppMessage(getApiError(error, 'Error closing inventory session'), 'Error', 'error')));
+        .then(response => response.ok ? showAppMessage('Inventory session closed successfully.', 'Success', 'success').then(() => location.reload()) : response.json().then(error => showAppMessage(getApiError(error, 'Error closing inventory session'), 'Error', 'error')));
 }
 
 async function showAppConfirm(message, title = 'Confirm') {

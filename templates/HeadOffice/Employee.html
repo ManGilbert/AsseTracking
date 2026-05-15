@@ -390,19 +390,22 @@ function submitEmployeeForm(employeeId) {
     .then(response => {
         if (response.ok) {
             return response.json().then(data => {
+                const modalElement = document.getElementById(employeeId ? 'editEmployeeModal' : 'createEmployeeModal');
+                bootstrap.Modal.getOrCreateInstance(modalElement).hide();
                 if (!employeeId && data.generated_username) {
-                    showAppMessage(`Employee account created successfully.\n\nUsername: ${data.generated_username}\nEmail: ${data.generated_email}\nPassword: ${data.default_password}`, 'Success', 'success');
+                    showAppMessage(`Employee account created successfully.\n\nUsername: ${data.generated_username}\nEmail: ${data.generated_email}\nPassword: ${data.default_password}`, 'Success', 'success').then(() => location.reload());
+                } else {
+                    showAppMessage('Employee updated successfully.', 'Success', 'success').then(() => location.reload());
                 }
-                setTimeout(() => location.reload(), 600);
             });
         } else {
-            response.json().then(e => alert(getApiError(e, 'Error saving employee')));
+            response.json().then(e => showAppMessage(getApiError(e, 'Error saving employee'), 'Error', 'error'));
         }
     });
 }
 
-function markEmployeeExited(employeeId) {
-    if (!confirm('Mark this employee as exited? This will initiate device recovery.')) return;
+async function markEmployeeExited(employeeId) {
+    if (!(await showAppConfirm('Mark this employee as exited? This will initiate device recovery.', 'Exit Employee'))) return;
     
     const exitDate = new Date().toISOString().split('T')[0];
     
@@ -416,8 +419,7 @@ function markEmployeeExited(employeeId) {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
-        location.reload();
+        showAppMessage(data.message || 'Employee exit status updated successfully.', 'Success', 'success').then(() => location.reload());
     });
 }
 

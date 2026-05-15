@@ -285,8 +285,8 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify(data)
         })
         .then(response => {
-            if (response.ok) location.reload();
-            else response.json().then(e => alert(getApiError(e, 'Error assigning device')));
+            if (response.ok) showAppMessage('Device assigned successfully.', 'Success', 'success').then(() => location.reload());
+            else response.json().then(e => showAppMessage(getApiError(e, 'Error assigning device'), 'Error', 'error'));
         });
     });
     
@@ -306,8 +306,8 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify(data)
         })
         .then(response => {
-            if (response.ok) location.reload();
-            else response.json().then(e => alert(getApiError(e, 'Error returning device')));
+            if (response.ok) showAppMessage('Device returned successfully.', 'Success', 'success').then(() => location.reload());
+            else response.json().then(e => showAppMessage(getApiError(e, 'Error returning device'), 'Error', 'error'));
         });
     });
 });

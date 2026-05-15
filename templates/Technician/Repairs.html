@@ -105,8 +105,8 @@ document.getElementById('startRepairForm').addEventListener('submit', function(e
             completion_date: document.getElementById('completionDate').value,
         })
     }).then(response => {
-        if (response.ok) location.href = "{% url 'technician_in_progress_repairs' %}";
-        else response.json().then(e => alert(getApiError(e, 'Error starting repair')));
+        if (response.ok) showAppMessage('Repair task received successfully.', 'Success', 'success').then(() => location.href = "{% url 'technician_in_progress_repairs' %}");
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error starting repair'), 'Error', 'error'));
     });
 });
 

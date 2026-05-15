@@ -112,7 +112,7 @@
                                     <td>{{ repair.request_date|date:"M d, H:i" }}</td>
                                     <td class="text-end">
                                         <div class="hstack gap-1 justify-content-end">
-                                            <button class="btn btn-sm btn-outline-success" onclick="approveRepair({{ repair.id }})">
+                                            <button class="btn btn-sm btn-outline-success" onclick="openApproveRepairModal({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
                                                 <i class="feather-check me-1"></i>Approve
                                             </button>
                                             <button class="btn btn-sm btn-outline-danger" onclick="rejectRepair({{ repair.id }})">
@@ -268,6 +268,36 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="approveRepairModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="approveRepairForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Approve Repair Request</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="approveRepairId">
+                    <div class="alert alert-info">Approve this repair request for <strong id="approveRepairDevice"></strong>?</div>
+                    <div class="mb-0">
+                        <label class="form-label">Assign Technician <span class="text-danger">*</span></label>
+                        <select class="form-select" id="approveTechnicianId" required>
+                            <option value="">Select technician</option>
+                            {% for technician in technicians %}
+                            <option value="{{ technician.id }}">{{ technician.username }}{% if technician.email %} - {{ technician.email }}{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Approve & Assign</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -433,7 +463,19 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         saveRepair();
     });
+
+    document.getElementById('approveRepairForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        approveRepair();
+    });
 });
+
+function openApproveRepairModal(repairId, deviceTag) {
+    document.getElementById('approveRepairId').value = repairId;
+    document.getElementById('approveRepairDevice').textContent = deviceTag;
+    document.getElementById('approveTechnicianId').value = '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('approveRepairModal')).show();
+}
 
 function openCreateRepairModal() {
     document.getElementById('repairModalTitle').textContent = 'New Repair Request';
@@ -475,29 +517,38 @@ function saveRepair() {
         body: JSON.stringify(data)
     })
     .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error saving repair')));
+        if (response.ok) {
+            showAppMessage(repairId ? 'Repair request updated successfully.' : 'Repair request created successfully.', 'Success', 'success').then(() => location.reload());
+        } else {
+            response.json().then(e => showAppMessage(getApiError(e, 'Error saving repair'), 'Error', 'error'));
+        }
     });
 }
 
 function approveRepair(repairId) {
-    if (!confirm('Approve this repair request?')) return;
+    repairId = repairId || document.getElementById('approveRepairId').value;
+    const technicianId = parseInt(document.getElementById('approveTechnicianId').value);
     
     fetch(`/api/repair-requests/${repairId}/approve/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken')
-        }
+        },
+        body: JSON.stringify({ technician_id: technicianId })
     })
     .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error approving repair')));
+        if (response.ok) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('approveRepairModal')).hide();
+            showAppMessage('Repair request approved and assigned to the technician.', 'Success', 'success').then(() => location.reload());
+        } else {
+            response.json().then(e => showAppMessage(getApiError(e, 'Error approving repair'), 'Error', 'error'));
+        }
     });
 }
 
-function rejectRepair(repairId) {
-    if (!confirm('Reject this repair request?')) return;
+async function rejectRepair(repairId) {
+    if (!(await showAppConfirm('Reject this repair request?', 'Reject Repair'))) return;
     
     fetch(`/api/repair-requests/${repairId}/reject/`, {
         method: 'POST',
@@ -507,13 +558,13 @@ function rejectRepair(repairId) {
         }
     })
     .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error rejecting repair')));
+        if (response.ok) showAppMessage('Repair request rejected successfully.', 'Success', 'success').then(() => location.reload());
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error rejecting repair'), 'Error', 'error'));
     });
 }
 
-function reassignCompletedRepair(repairId) {
-    if (!confirm('Reassign this repaired device back to the employee?')) return;
+async function reassignCompletedRepair(repairId) {
+    if (!(await showAppConfirm('Reassign this repair request?', 'Reassign Repair'))) return;
 
     fetch(`/api/repair-requests/${repairId}/reassign_completed/`, {
         method: 'POST',
@@ -524,8 +575,8 @@ function reassignCompletedRepair(repairId) {
         body: JSON.stringify({ condition_on_issue: 'Reassigned after completed repair' })
     })
     .then(response => {
-        if (response.ok) location.reload();
-        else response.json().then(e => alert(getApiError(e, 'Error reassigning repaired device')));
+        if (response.ok) showAppMessage('Repair request reassigned successfully.', 'Success', 'success').then(() => location.reload());
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error reassigning repaired device'), 'Error', 'error'));
     });
 }
 

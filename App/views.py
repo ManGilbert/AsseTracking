@@ -10,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Q
+from django.db.models import Count, Min, Q
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -266,6 +266,24 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
         department = Department.objects.filter(name=name).order_by("id").first()
         return Response(self.get_serializer(department).data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        department = self.get_object()
+        old_name = department.name
+        new_name = request.data.get("name", "").strip()
+        if not new_name:
+            return Response({"name": "Department name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        Department.objects.filter(name=old_name).update(name=new_name)
+        updated = Department.objects.filter(name=new_name).order_by("id").first()
+        AuditService.log_action(
+            request.user,
+            "DEPARTMENT_UPDATED",
+            "Department",
+            updated.id if updated else department.id,
+            f"Department: {old_name} -> {new_name}",
+        )
+        return Response(self.get_serializer(updated).data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
         return Response(
@@ -643,7 +661,10 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and user.role == "EMPLOYEE":
             return queryset.filter(employee__user=user)
         if user.is_authenticated and user.role == "TECHNICIAN":
-            return queryset.filter(status__in=["APPROVED", "IN_PROGRESS", "COMPLETED"])
+            return queryset.filter(
+                Q(repairlog__technician=user)
+                | Q(status="APPROVED", repairlog__isnull=True)
+            )
         return queryset
 
     def get_serializer_class(self):
@@ -739,10 +760,21 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
         POST /api/repair-requests/{id}/approve/
         """
         repair_request = self.get_object()
+        technician_id = request.data.get("technician_id") or request.data.get("technician")
+        if technician_id:
+            try:
+                technician = User.objects.get(id=technician_id, role="TECHNICIAN", is_active=True)
+            except (User.DoesNotExist, TypeError, ValueError):
+                return Response(
+                    {"error": "Select an active technician before approving this repair request."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            technician = User.objects.filter(role="TECHNICIAN", is_active=True).order_by("id").first()
 
         try:
             approved_request = RepairService.approve_repair(
-                repair_request.id, request.user
+                repair_request.id, request.user, technician
             )
 
             serializer = RepairRequestSerializer(approved_request)
@@ -1092,6 +1124,7 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in [
             "mark_verified",
+            "mark_pending",
             "mark_missing",
             "mark_extra",
             "mark_in_repair",
@@ -1101,6 +1134,22 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         ]:
             return [IsHeadOffice()]
         return [IsAuthenticated()]
+
+    @action(detail=True, methods=["post"], permission_classes=[CanVerifyInventory])
+    def mark_pending(self, request, pk=None):
+        item = self.get_object()
+        comment = request.data.get("comment", "")
+        item.status = "PENDING"
+        item.comment = comment
+        item.save(update_fields=["status", "comment"])
+        AuditService.log_action(
+            request.user,
+            "INVENTORY_PENDING",
+            "InventoryItem",
+            item.id,
+            f"Device {item.device.company_tag} marked pending",
+        )
+        return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
 
     @action(
         detail=True,
@@ -1361,6 +1410,7 @@ def login_view(request):
 
         if user is not None and user.is_active:
             login(request, user)
+            messages.success(request, "Login successful.")
             return redirect(_get_dashboard_url(user.role))
 
         inactive_user = User.objects.filter(
@@ -1371,7 +1421,7 @@ def login_view(request):
             messages.error(request, DEACTIVATED_ACCOUNT_MESSAGE)
             return render(request, "Auth/login.html", {"username": username_or_email})
 
-        messages.error(request, "Invalid username/email or password")
+        messages.error(request, "Invalid username or password.")
         return render(request, "Auth/login.html", {"username": username_or_email})
 
     if request.GET.get("message"):
@@ -1382,6 +1432,7 @@ def login_view(request):
 @login_required
 def logout_view(request):
     logout(request)
+    messages.success(request, "Logout successful.")
     return redirect("login")
 
 
@@ -1597,7 +1648,7 @@ def employee_dashboard(request):
 @role_required("TECHNICIAN")
 def technician_dashboard(request):
     repairs = RepairRequest.objects.select_related("device", "employee").filter(
-        status__in=["APPROVED", "IN_PROGRESS", "COMPLETED"]
+        repairlog__technician=request.user
     )
     context = {
         "approved_repairs": repairs.filter(status="APPROVED"),
@@ -1616,7 +1667,7 @@ def technician_dashboard(request):
 def technician_repairs(request):
     repairs = RepairRequest.objects.select_related(
         "device", "device__assigned_branch", "device__assigned_employee", "employee"
-    ).filter(status="APPROVED").order_by("-request_date")
+    ).filter(status="APPROVED", repairlog__technician=request.user).order_by("-request_date")
     return render(request, "Technician/Repairs.html", {"repairs": repairs})
 
 
@@ -1625,7 +1676,7 @@ def technician_repairs(request):
 def technician_in_progress_repairs(request):
     repairs = RepairRequest.objects.select_related(
         "device", "device__assigned_branch", "employee"
-    ).filter(status="IN_PROGRESS").order_by("-request_date")
+    ).filter(status="IN_PROGRESS", repairlog__technician=request.user).order_by("-request_date")
     return render(request, "Technician/InProgressRepairs.html", {"repairs": repairs})
 
 
@@ -1634,14 +1685,16 @@ def technician_in_progress_repairs(request):
 def technician_completed_repairs(request):
     repair_logs = RepairLog.objects.select_related(
         "repair_request", "repair_request__device", "repair_request__employee", "technician"
-    ).filter(repair_request__status="COMPLETED").order_by("-completed_date", "-start_date")
+    ).filter(repair_request__status="COMPLETED", technician=request.user).order_by("-completed_date", "-start_date")
     return render(request, "Technician/CompletedRepairs.html", {"repair_logs": repair_logs})
 
 
 @login_required
 @role_required("TECHNICIAN")
 def technician_device_lookup(request):
-    devices = Device.objects.select_related("assigned_employee", "assigned_branch").all().order_by("company_tag")
+    devices = Device.objects.select_related("assigned_employee", "assigned_branch").filter(
+        repairrequest__repairlog__technician=request.user
+    ).distinct().order_by("company_tag")
     return render(request, "Technician/DeviceLookup.html", {"devices": devices})
 
 
@@ -1650,7 +1703,7 @@ def technician_device_lookup(request):
 def technician_repair_history(request):
     repair_logs = RepairLog.objects.select_related(
         "repair_request", "repair_request__device", "repair_request__employee", "technician"
-    ).all().order_by("-start_date")
+    ).filter(technician=request.user).order_by("-start_date")
     return render(request, "Technician/RepairHistory.html", {"repair_logs": repair_logs})
 
 
@@ -1732,7 +1785,7 @@ def head_office_departments(request):
     """Global department registration view."""
     department_names = (
         Department.objects.values("name")
-        .annotate(branch_count=Count("branch", distinct=True))
+        .annotate(branch_count=Count("branch", distinct=True), first_id=Min("id"))
         .order_by("name")
     )
     return render(
@@ -1825,6 +1878,7 @@ def head_office_repairs(request):
         'statuses': RepairRequest._meta.get_field('status').choices,
         'devices': Device.objects.select_related('assigned_employee').exclude(assigned_employee__isnull=True),
         'employees': Employee.objects.filter(status='ACTIVE'),
+        'technicians': User.objects.filter(role='TECHNICIAN', is_active=True).order_by('username'),
     }
     return render(request, "HeadOffice/RequestRepairs.html", context)
 

@@ -150,7 +150,7 @@ async function approveInventorySession(sessionId) {
         headers: { 'X-CSRFToken': getCookie('csrftoken') }
     })
     .then(response => {
-        if (response.ok) location.reload();
+        if (response.ok) showAppMessage('Inventory session approved successfully.', 'Success', 'success').then(() => location.reload());
         else response.json().then(e => showAppMessage(getApiError(e, 'Error approving inventory session'), 'Error', 'error'));
     });
 }
@@ -163,7 +163,7 @@ async function closeInventorySession(sessionId) {
         headers: { 'X-CSRFToken': getCookie('csrftoken') }
     })
     .then(response => {
-        if (response.ok) location.reload();
+        if (response.ok) showAppMessage('Inventory session closed successfully.', 'Success', 'success').then(() => location.reload());
         else response.json().then(e => showAppMessage(getApiError(e, 'Error closing inventory session'), 'Error', 'error'));
     });
 }

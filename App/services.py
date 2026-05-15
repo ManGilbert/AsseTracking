@@ -258,13 +258,14 @@ class RepairService:
             return repair_request
 
     @staticmethod
-    def approve_repair(repair_request_id, approved_by_user):
+    def approve_repair(repair_request_id, approved_by_user, technician_user):
         """
         Approve repair request by HEAD_OFFICE.
 
         Args:
             repair_request_id: Repair request to approve
             approved_by_user: HEAD_OFFICE user approving
+            technician_user: TECHNICIAN user assigned to perform the work
 
         Returns:
             Updated RepairRequest instance
@@ -274,11 +275,27 @@ class RepairService:
 
         if repair_request.status != "PENDING":
             raise ValueError("Can only approve pending repair requests")
+        if technician_user and (technician_user.role != "TECHNICIAN" or not technician_user.is_active):
+            raise ValueError("Select an active technician for this repair request")
 
         with transaction.atomic():
             repair_request.status = "APPROVED"
             repair_request.approved_by = approved_by_user
             repair_request.save()
+
+            if technician_user:
+                repair_log, created = RepairLog.objects.get_or_create(
+                    repair_request=repair_request,
+                    defaults={
+                        "technician": technician_user,
+                        "notes": "Assigned by Head Office",
+                        "parts_used": "",
+                    },
+                )
+                if not created:
+                    repair_log.technician = technician_user
+                    repair_log.notes = repair_log.notes or "Assigned by Head Office"
+                    repair_log.save(update_fields=["technician", "notes"])
 
             # Update device status
             device.status = "IN_REPAIR"
@@ -290,12 +307,21 @@ class RepairService:
                 action="REPAIR_APPROVED",
                 model_name="RepairRequest",
                 object_id=repair_request.id,
-                details=f"Approved by {approved_by_user.username}",
+                details=(
+                    f"Approved by {approved_by_user.username}; assigned to {technician_user.username}"
+                    if technician_user
+                    else f"Approved by {approved_by_user.username}"
+                ),
             )
             _notify_user(
                 repair_request.employee.user,
                 f"Repair request for device {device.company_tag} was approved.",
             )
+            if technician_user:
+                _notify_user(
+                    technician_user,
+                    f"Repair task assigned for device {device.company_tag}.",
+                )
 
             return repair_request
 
@@ -357,6 +383,10 @@ class RepairService:
         if repair_request.status != "APPROVED":
             raise ValueError("Can only start approved repair requests")
 
+        assigned_log = RepairLog.objects.filter(repair_request=repair_request).first()
+        if assigned_log and assigned_log.technician_id != technician_user.id:
+            raise ValueError("You can only work on repair tasks assigned to your account")
+
         with transaction.atomic():
             repair_log, created = RepairLog.objects.get_or_create(
                 repair_request=repair_request,
@@ -370,6 +400,8 @@ class RepairService:
             )
 
             if not created:
+                if repair_log.technician_id and repair_log.technician_id != technician_user.id:
+                    raise ValueError("You can only work on repair tasks assigned to your account")
                 repair_log.technician = technician_user
                 if notes is not None:
                     repair_log.notes = notes
@@ -421,11 +453,17 @@ class RepairService:
                 "Can only complete approved or in-progress repair requests"
             )
 
+        assigned_log = RepairLog.objects.filter(repair_request=repair_request).first()
+        if assigned_log and assigned_log.technician_id != technician_user.id:
+            raise ValueError("You can only complete repair tasks assigned to your account")
+
         with transaction.atomic():
             # Get or create repair log
             repair_log, created = RepairLog.objects.get_or_create(
                 repair_request=repair_request
             )
+            if not created and repair_log.technician_id and repair_log.technician_id != technician_user.id:
+                raise ValueError("You can only complete repair tasks assigned to your account")
 
             # Update repair log
             repair_log.technician = technician_user
@@ -576,14 +614,11 @@ class InventoryService:
             )
 
             # Auto-load all devices for branch
-            branch_devices = Device.objects.filter(
-                Q(assigned_branch=branch)
-                | Q(location_type="HEAD_OFFICE")
-            )
+            branch_devices = Device.objects.filter(assigned_branch=branch)
 
             for device in branch_devices:
                 InventoryItem.objects.create(
-                    session=session, device=device, status="VERIFIED"
+                    session=session, device=device, status="PENDING"
                 )
 
             # Create audit log
