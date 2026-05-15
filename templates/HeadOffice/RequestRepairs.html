@@ -288,7 +288,7 @@
                         <select class="form-select" id="approveTechnicianId" required>
                             <option value="">Select technician</option>
                             {% for technician in technicians %}
-                            <option value="{{ technician.id }}">{{ technician.username }}{% if technician.email %} - {{ technician.email }}{% endif %}</option>
+                            <option value="{{ technician.id }}">{{ technician.employee.full_name|default:technician.username }}{% if technician.email %} - {{ technician.email }}{% endif %}</option>
                             {% endfor %}
                         </select>
                     </div>

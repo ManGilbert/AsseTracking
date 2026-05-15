@@ -1878,7 +1878,7 @@ def head_office_repairs(request):
         'statuses': RepairRequest._meta.get_field('status').choices,
         'devices': Device.objects.select_related('assigned_employee').exclude(assigned_employee__isnull=True),
         'employees': Employee.objects.filter(status='ACTIVE'),
-        'technicians': User.objects.filter(role='TECHNICIAN', is_active=True).order_by('username'),
+        'technicians': User.objects.select_related('employee').filter(role='TECHNICIAN', is_active=True).order_by('employee__full_name', 'username'),
     }
     return render(request, "HeadOffice/RequestRepairs.html", context)
 
