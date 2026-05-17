@@ -102,6 +102,16 @@
                                             data-model="{{ item.device.brand }} {{ item.device.model }}"
                                             data-employee="{{ item.device.assigned_employee.full_name|default:'-' }}"
                                             data-status="{{ item.status }}"
+                                            data-device-status="{{ item.device.status }}"
+                                            data-device-location="{{ item.device.current_location|default:'-' }}"
+                                            data-device-branch="{{ item.device.assigned_branch.name|default:'-' }}"
+                                            data-device-condition="{{ item.device.condition_notes|default:'No condition notes' }}"
+                                            data-repair-request-status="{{ item.latest_repair.status|default:'No repair request' }}"
+                                            data-repair-technician="{{ item.repair_technician|default:'Not started' }}"
+                                            data-repair-started="{{ item.repair_started|yesno:'Yes,No' }}"
+                                            data-repair-priority="{{ item.latest_repair.priority|default:'N/A' }}"
+                                            data-repair-approved-by="{{ item.latest_repair.approved_by.username|default:'N/A' }}"
+                                            data-repair-issue="{{ item.latest_repair.issue_description|default:'No issue reported' }}"
                                             data-comment="{{ item.comment|default:'' }}">
                                             <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
                                             <td>{{ item.device.serial_number }}</td>
@@ -160,6 +170,29 @@
                     <div class="mb-3">
                         <div class="fw-semibold" id="inventoryDeviceTitle"></div>
                         <div class="text-muted small" id="inventoryDeviceMeta"></div>
+                    </div>
+                    <div class="mb-3 border rounded p-3 bg-light">
+                        <div class="fw-semibold mb-2">Complete device details</div>
+                        <div class="row g-2">
+                            <div class="col-md-6"><strong>Status</strong><div id="inventoryDeviceStatus"></div></div>
+                            <div class="col-md-6"><strong>Location</strong><div id="inventoryDeviceLocation"></div></div>
+                            <div class="col-md-6"><strong>Assigned branch</strong><div id="inventoryDeviceBranch"></div></div>
+                            <div class="col-md-6"><strong>Assigned employee</strong><div id="inventoryDeviceAssignedEmployee"></div></div>
+                            <div class="col-12"><strong>Condition notes</strong><div id="inventoryDeviceCondition"></div></div>
+                        </div>
+                    </div>
+                    <div class="mb-3 border rounded p-3">
+                        <div class="fw-semibold mb-2">Audit context</div>
+                        <div class="row g-2">
+                            <div class="col-md-6"><strong>Branch approval</strong><div id="inventorySessionBranchApproval"></div></div>
+                            <div class="col-md-6"><strong>Head office approval</strong><div id="inventorySessionHeadOfficeApproval"></div></div>
+                            <div class="col-md-6"><strong>Repair request</strong><div id="inventoryRepairRequestStatus"></div></div>
+                            <div class="col-md-6"><strong>Technician started</strong><div id="inventoryRepairStarted"></div></div>
+                            <div class="col-md-6"><strong>Technician</strong><div id="inventoryRepairTechnician"></div></div>
+                            <div class="col-md-6"><strong>Priority</strong><div id="inventoryRepairPriority"></div></div>
+                            <div class="col-md-12"><strong>Approved by</strong><div id="inventoryRepairApprovedBy"></div></div>
+                            <div class="col-md-12"><strong>Issue description</strong><div id="inventoryRepairIssue"></div></div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Audit Status</label>
@@ -313,7 +346,20 @@ document.getElementById('searchInventoryItems').addEventListener('input', functi
 function openInventoryAction(row) {
     document.getElementById('inventoryItemId').value = row.dataset.itemId;
     document.getElementById('inventoryDeviceTitle').textContent = `${row.dataset.tag} - ${row.dataset.model}`;
-    document.getElementById('inventoryDeviceMeta').textContent = `Serial: ${row.dataset.serial} | Employee: ${row.dataset.employee} | Current status: ${row.dataset.status}`;
+    document.getElementById('inventoryDeviceMeta').textContent = `Serial: ${row.dataset.serial} | Employee: ${row.dataset.employee} | Item status: ${row.dataset.status}`;
+    document.getElementById('inventoryDeviceStatus').textContent = row.dataset.deviceStatus;
+    document.getElementById('inventoryDeviceLocation').textContent = row.dataset.deviceLocation;
+    document.getElementById('inventoryDeviceBranch').textContent = row.dataset.deviceBranch;
+    document.getElementById('inventoryDeviceAssignedEmployee').textContent = row.dataset.employee || '-';
+    document.getElementById('inventoryDeviceCondition').textContent = row.dataset.deviceCondition;
+    document.getElementById('inventorySessionBranchApproval').textContent = "{{ session.approved_by_branch|yesno:'Approved,Pending' }}";
+    document.getElementById('inventorySessionHeadOfficeApproval').textContent = "{{ session.approved_by_head_office|yesno:'Approved,Pending' }}";
+    document.getElementById('inventoryRepairRequestStatus').textContent = row.dataset.repairRequestStatus;
+    document.getElementById('inventoryRepairStarted').textContent = row.dataset.repairStarted;
+    document.getElementById('inventoryRepairTechnician').textContent = row.dataset.repairTechnician;
+    document.getElementById('inventoryRepairPriority').textContent = row.dataset.repairPriority;
+    document.getElementById('inventoryRepairApprovedBy').textContent = row.dataset.repairApprovedBy;
+    document.getElementById('inventoryRepairIssue').textContent = row.dataset.repairIssue;
     document.querySelectorAll('.audit-status-check').forEach(checkbox => {
         checkbox.checked = checkbox.dataset.status === row.dataset.status;
     });

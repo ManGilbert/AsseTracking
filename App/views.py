@@ -1974,6 +1974,25 @@ def head_office_inventory_detail(request, session_id):
     items = list(session.items.select_related(
         "device", "device__assigned_employee", "device__assigned_branch"
     ).all().order_by("device__company_tag"))
+
+    device_ids = [item.device_id for item in items]
+    repair_requests = RepairRequest.objects.filter(device_id__in=device_ids).select_related(
+        "approved_by"
+    ).prefetch_related("repairlog").order_by("-request_date")
+
+    latest_repairs = {}
+    for repair_request in repair_requests:
+        if repair_request.device_id not in latest_repairs:
+            latest_repairs[repair_request.device_id] = repair_request
+
+    for item in items:
+        item.latest_repair = latest_repairs.get(item.device_id)
+        item.repair_started = bool(item.latest_repair and item.latest_repair.status in ("APPROVED", "IN_PROGRESS"))
+        if item.latest_repair and hasattr(item.latest_repair, "repairlog") and item.latest_repair.repairlog.technician:
+            item.repair_technician = getattr(item.latest_repair.repairlog.technician, 'username', None)
+        else:
+            item.repair_technician = None
+
     departments = Department.objects.filter(branch=session.branch).order_by("name")
     department_groups = []
     grouped_item_ids = set()
