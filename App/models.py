@@ -276,6 +276,18 @@ class InventorySession(models.Model):
     approved_by_branch = models.BooleanField(default=False)
     approved_by_head_office = models.BooleanField(default=False)
 
+    @property
+    def is_active(self):
+        if not self.end_date:
+            return True
+        return timezone.now() < self.end_date
+
+    @property
+    def is_closed(self):
+        if not self.end_date:
+            return False
+        return timezone.now() >= self.end_date
+
     def __str__(self):
         return f"{self.branch} Inventory"
 

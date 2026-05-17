@@ -16,6 +16,11 @@
                     <a href="{% url 'head_office_inventory' %}" class="btn btn-outline-secondary">
                         <i class="feather-arrow-left me-1"></i>Back
                     </a>
+                    {% if session.is_active %}
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#registerFoundDeviceModal">
+                        <i class="feather-plus-circle me-1"></i>Register Found Device
+                    </button>
+                    {% endif %}
                     {% if not session.approved_by_head_office %}
                     <button class="btn btn-success" onclick="approveInventorySession({{ session.id }})">
                         <i class="feather-check me-1"></i>Final Approval
@@ -85,11 +90,12 @@
                                             <th>Employee</th>
                                             <th>Status</th>
                                             <th>Comment</th>
+                                            <th class="text-end">Audit</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                     {% for item in group.items %}
-                                        <tr class="inventory-device-row" role="button" tabindex="0"
+                                        <tr class="inventory-device-row"
                                             data-item-id="{{ item.id }}"
                                             data-tag="{{ item.device.company_tag }}"
                                             data-serial="{{ item.device.serial_number }}"
@@ -103,9 +109,18 @@
                                             <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
                                             <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
                                             <td>{{ item.comment|default:"-" }}</td>
+                                            <td class="text-end">
+                                                {% if session.is_active %}
+                                                <button type="button" class="btn btn-sm btn-outline-primary audit-device-btn">
+                                                    <i class="feather-clipboard me-1"></i>Audit
+                                                </button>
+                                                {% else %}
+                                                <span class="text-muted small">Closed</span>
+                                                {% endif %}
+                                            </td>
                                         </tr>
                                     {% empty %}
-                                        <tr><td colspan="6" class="text-center text-muted py-4">No devices in this department.</td></tr>
+                                        <tr><td colspan="7" class="text-center text-muted py-4">No devices in this department.</td></tr>
                                     {% endfor %}
                                     </tbody>
                                 </table>
@@ -137,7 +152,7 @@
         <div class="modal-content">
             <form id="inventoryActionForm">
                 <div class="modal-header">
-                    <h5 class="modal-title">Update Inventory Device</h5>
+                    <h5 class="modal-title">Audit Device</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -147,15 +162,45 @@
                         <div class="text-muted small" id="inventoryDeviceMeta"></div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Inventory Action</label>
-                        <select class="form-select" id="inventoryAction" required>
-                            <option value="mark_pending">Pending</option>
-                            <option value="mark_verified">Verified (Device is OK)</option>
-                            <option value="mark_missing">Missing</option>
-                            <option value="mark_extra">Register Found Device</option>
-                            <option value="mark_in_repair">In Repair</option>
-                            <option value="return_head_office">Returned to Head Office</option>
-                        </select>
+                        <label class="form-label">Audit Status</label>
+                        <div class="row g-2" id="inventoryAuditStatuses">
+                            <div class="col-md-6">
+                                <label class="form-check border rounded p-3 h-100">
+                                    <input class="form-check-input audit-status-check" type="checkbox" value="mark_verified" data-status="VERIFIED">
+                                    <span class="form-check-label">Verified</span>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-check border rounded p-3 h-100">
+                                    <input class="form-check-input audit-status-check" type="checkbox" value="mark_missing" data-status="MISSING">
+                                    <span class="form-check-label">Missing</span>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-check border rounded p-3 h-100">
+                                    <input class="form-check-input audit-status-check" type="checkbox" value="mark_in_repair" data-status="IN_REPAIR">
+                                    <span class="form-check-label">In Repair</span>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-check border rounded p-3 h-100">
+                                    <input class="form-check-input audit-status-check" type="checkbox" value="return_head_office" data-status="RETURNED_HEAD_OFFICE">
+                                    <span class="form-check-label">Returned to Head Office</span>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-check border rounded p-3 h-100">
+                                    <input class="form-check-input audit-status-check" type="checkbox" value="mark_pending" data-status="PENDING">
+                                    <span class="form-check-label">Pending</span>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-check border rounded p-3 h-100">
+                                    <input class="form-check-input audit-status-check" type="checkbox" value="mark_extra" data-status="EXTRA">
+                                    <span class="form-check-label">Other / Extra</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                     <div class="mb-0">
                         <label class="form-label">Comment</label>
@@ -171,18 +216,78 @@
     </div>
 </div>
 
+<div class="modal fade" id="registerFoundDeviceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="registerFoundDeviceForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Register Found Device</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Device Type <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="foundDeviceType" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Brand <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="foundDeviceBrand" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Model <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="foundDeviceModel" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Serial Number <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="foundDeviceSerial" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Company Tag <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="foundDeviceTag" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Condition Notes</label>
+                            <textarea class="form-control" id="foundDeviceCondition" rows="2"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Audit Comment</label>
+                            <textarea class="form-control" id="foundDeviceComment" rows="2" placeholder="Why this device is being added to the audit"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Register Device</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 const inventoryActionModalElement = document.getElementById('inventoryActionModal');
 const inventoryActionModal = inventoryActionModalElement ? bootstrap.Modal.getOrCreateInstance(inventoryActionModalElement) : null;
+const registerFoundDeviceModalElement = document.getElementById('registerFoundDeviceModal');
+const registerFoundDeviceModal = registerFoundDeviceModalElement ? bootstrap.Modal.getOrCreateInstance(registerFoundDeviceModalElement) : null;
 
-document.querySelectorAll('.inventory-device-row').forEach(row => {
-    const openModal = () => openInventoryAction(row);
-    row.addEventListener('click', openModal);
-    row.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            openModal();
-        }
+document.querySelectorAll('.audit-device-btn').forEach(button => {
+    button.addEventListener('click', event => {
+        event.stopPropagation();
+        openInventoryAction(button.closest('.inventory-device-row'));
+    });
+});
+
+document.querySelectorAll('.audit-status-check').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        if (!this.checked) return;
+        document.querySelectorAll('.audit-status-check').forEach(other => {
+            if (other !== this) other.checked = false;
+        });
     });
 });
 
@@ -206,18 +311,12 @@ document.getElementById('searchInventoryItems').addEventListener('input', functi
 });
 
 function openInventoryAction(row) {
-    const statusActionMap = {
-        PENDING: 'mark_pending',
-        VERIFIED: 'mark_verified',
-        MISSING: 'mark_missing',
-        EXTRA: 'mark_extra',
-        IN_REPAIR: 'mark_in_repair',
-        RETURNED_HEAD_OFFICE: 'return_head_office'
-    };
     document.getElementById('inventoryItemId').value = row.dataset.itemId;
     document.getElementById('inventoryDeviceTitle').textContent = `${row.dataset.tag} - ${row.dataset.model}`;
     document.getElementById('inventoryDeviceMeta').textContent = `Serial: ${row.dataset.serial} | Employee: ${row.dataset.employee} | Current status: ${row.dataset.status}`;
-    document.getElementById('inventoryAction').value = statusActionMap[row.dataset.status] || 'mark_pending';
+    document.querySelectorAll('.audit-status-check').forEach(checkbox => {
+        checkbox.checked = checkbox.dataset.status === row.dataset.status;
+    });
     document.getElementById('inventoryComment').value = row.dataset.comment || '';
     inventoryActionModal.show();
 }
@@ -225,7 +324,12 @@ function openInventoryAction(row) {
 document.getElementById('inventoryActionForm').addEventListener('submit', function(event) {
     event.preventDefault();
     const itemId = document.getElementById('inventoryItemId').value;
-    const action = document.getElementById('inventoryAction').value;
+    const selectedStatus = document.querySelector('.audit-status-check:checked');
+    if (!selectedStatus) {
+        showAppMessage('Please choose an audit status.', 'Warning', 'warning');
+        return;
+    }
+    const action = selectedStatus.value;
     const comment = document.getElementById('inventoryComment').value;
 
     fetch(`/api/inventory-items/${itemId}/${action}/`, {
@@ -234,9 +338,34 @@ document.getElementById('inventoryActionForm').addEventListener('submit', functi
         body: JSON.stringify({comment})
     }).then(response => {
         if (response.ok) {
-            showAppMessage('Inventory device updated successfully.', 'Success', 'success').then(() => location.reload());
+            showAppMessage('Device audit updated successfully.', 'Success', 'success').then(() => location.reload());
         } else {
             response.json().then(error => showAppMessage(getApiError(error, 'Error updating inventory item'), 'Error', 'error'));
+        }
+    });
+});
+
+document.getElementById('registerFoundDeviceForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    const data = {
+        device_type: document.getElementById('foundDeviceType').value,
+        brand: document.getElementById('foundDeviceBrand').value,
+        model: document.getElementById('foundDeviceModel').value,
+        serial_number: document.getElementById('foundDeviceSerial').value,
+        company_tag: document.getElementById('foundDeviceTag').value,
+        condition_notes: document.getElementById('foundDeviceCondition').value,
+        comment: document.getElementById('foundDeviceComment').value
+    };
+
+    fetch(`/api/inventory-sessions/{{ session.id }}/register_found_device/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify(data)
+    }).then(response => {
+        if (response.ok) {
+            showAppMessage('Found device registered and added to this audit.', 'Success', 'success').then(() => location.reload());
+        } else {
+            response.json().then(error => showAppMessage(getApiError(error, 'Error registering found device'), 'Error', 'error'));
         }
     });
 });
@@ -244,13 +373,13 @@ document.getElementById('inventoryActionForm').addEventListener('submit', functi
 async function approveInventorySession(sessionId) {
     if (!(await showAppConfirm('Complete final Head Office approval for this inventory session?', 'Final Approval'))) return;
     fetch(`/api/inventory-sessions/${sessionId}/approve_head_office/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
-        .then(response => response.ok ? showAppMessage('Inventory session approved successfully.', 'Success', 'success').then(() => location.reload()) : response.json().then(error => showAppMessage(getApiError(error, 'Error approving inventory session'), 'Error', 'error')));
+        .then(response => response.ok ? showAppMessage('Inventory session completed successfully.', 'Success', 'success').then(() => location.reload()) : response.json().then(error => showAppMessage(getApiError(error, 'Error approving inventory session'), 'Error', 'error')));
 }
 
 async function closeInventorySession(sessionId) {
     if (!(await showAppConfirm('Close this inventory session?', 'Close Inventory'))) return;
     fetch(`/api/inventory-sessions/${sessionId}/close/`, {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}})
-        .then(response => response.ok ? showAppMessage('Inventory session closed successfully.', 'Success', 'success').then(() => location.reload()) : response.json().then(error => showAppMessage(getApiError(error, 'Error closing inventory session'), 'Error', 'error')));
+        .then(response => response.ok ? showAppMessage('Inventory audit has been closed.', 'Success', 'success').then(() => location.reload()) : response.json().then(error => showAppMessage(getApiError(error, 'Error closing inventory session'), 'Error', 'error')));
 }
 
 async function showAppConfirm(message, title = 'Confirm') {

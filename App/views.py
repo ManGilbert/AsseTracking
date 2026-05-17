@@ -10,6 +10,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from django.db.models import Count, Min, Q
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib import messages
@@ -988,6 +989,7 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             "approve_head_office",
             "approve_branch",
             "close",
+            "register_found_device",
         ]:
             if self.action == "approve_branch":
                 return [IsBranchManager()]
@@ -1047,9 +1049,6 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
     def approve_head_office(self, request, pk=None):
         session = self.get_object()
         session.approved_by_head_office = True
-        if not session.end_date:
-            from django.utils import timezone
-            session.end_date = timezone.now()
         session.save()
         AuditService.log_action(
             request.user,
@@ -1079,6 +1078,68 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             f"Session for {session.branch.name}",
         )
         return Response(self.get_serializer(session).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], permission_classes=[CanCreateInventorySession])
+    def register_found_device(self, request, pk=None):
+        session = self.get_object()
+        required_fields = ["device_type", "brand", "model", "serial_number", "company_tag"]
+        missing_fields = [
+            field for field in required_fields if not str(request.data.get(field, "")).strip()
+        ]
+
+        if missing_fields:
+            return Response(
+                {field: ["This field is required."] for field in missing_fields},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serial_number = request.data["serial_number"].strip()
+        company_tag = request.data["company_tag"].strip()
+
+        if Device.objects.filter(serial_number__iexact=serial_number).exists():
+            return Response(
+                {"serial_number": "A device with this serial number is already registered."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if Device.objects.filter(company_tag__iexact=company_tag).exists():
+            return Response(
+                {"company_tag": "A device with this company tag is already registered."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            device = Device.objects.create(
+                device_type=request.data["device_type"].strip(),
+                brand=request.data["brand"].strip(),
+                model=request.data["model"].strip(),
+                serial_number=serial_number,
+                company_tag=company_tag,
+                status="AVAILABLE",
+                assigned_branch=session.branch,
+                location_type="BRANCH",
+                current_location=session.branch.name,
+                condition_notes=request.data.get("condition_notes", "").strip(),
+            )
+            item = InventoryItem.objects.create(
+                session=session,
+                device=device,
+                status="EXTRA",
+                comment=request.data.get("comment", "").strip(),
+            )
+            AuditService.log_action(
+                request.user,
+                "INVENTORY_FOUND_DEVICE_REGISTERED",
+                "InventoryItem",
+                item.id,
+                f"Found device {device.company_tag} registered during {session.branch.name} inventory.",
+            )
+            if session.branch.manager:
+                _notify_user(
+                    session.branch.manager.user,
+                    f"Found device {device.company_tag} was registered during {session.branch.name} inventory.",
+                )
+
+        return Response(InventoryItemSerializer(item).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], permission_classes=[CanVerifyInventory])
     def approve_branch(self, request, pk=None):
@@ -1945,7 +2006,7 @@ def head_office_inventory_detail(request, session_id):
         "session": session,
         "items": items,
         "department_groups": department_groups,
-        "report_status": "Completed" if session.end_date else "In Progress",
+        "report_status": "Completed" if session.is_closed else "In Progress",
         "report_total": report_total,
         "report_missing": sum(1 for item in items if item.status == "MISSING"),
         "report_repair": sum(1 for item in items if item.status == "IN_REPAIR"),

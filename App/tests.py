@@ -1,8 +1,10 @@
 from django.test import TestCase
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import Branch, Device, DeviceAssignment, Employee, InventorySession, RepairRequest, User
+from .models import Branch, Device, DeviceAssignment, Employee, InventoryItem, InventorySession, RepairRequest, User
 from .serializers import DEFAULT_EMPLOYEE_PASSWORD
 
 
@@ -249,7 +251,77 @@ class HeadOfficeWorkflowApiTests(TestCase):
 
         self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
         self.assertTrue(approve_response.data["approved_by_head_office"])
-        self.assertIsNotNone(InventorySession.objects.get(id=create_response.data["id"]).end_date)
+        self.assertIsNone(InventorySession.objects.get(id=create_response.data['id']).end_date)
+
+    def test_inventory_session_with_future_end_date_remains_active(self):
+        future_end = timezone.now() + timedelta(days=5)
+        session = InventorySession.objects.create(
+            branch=self.branch,
+            start_date=timezone.now(),
+            end_date=future_end,
+            created_by=self.head_office,
+        )
+
+        self.assertTrue(session.is_active)
+        self.assertFalse(session.is_closed)
+
+    def test_head_office_can_register_found_device_during_inventory(self):
+        session = InventorySession.objects.create(
+            branch=self.branch,
+            start_date="2026-05-06T10:00:00Z",
+            created_by=self.head_office,
+        )
+
+        response = self.client.post(
+            f"/api/inventory-sessions/{session.id}/register_found_device/",
+            {
+                "device_type": "Laptop",
+                "brand": "Lenovo",
+                "model": "ThinkPad",
+                "serial_number": "SN-FOUND-1",
+                "company_tag": "TAG-FOUND-1",
+                "condition_notes": "Found in storage",
+                "comment": "Added during audit",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        device = Device.objects.get(company_tag="TAG-FOUND-1")
+        self.assertEqual(device.assigned_branch, self.branch)
+        self.assertEqual(device.location_type, "BRANCH")
+        item = InventoryItem.objects.get(session=session, device=device)
+        self.assertEqual(item.status, "EXTRA")
+        self.assertEqual(item.comment, "Added during audit")
+
+    def test_register_found_device_rejects_existing_device(self):
+        Device.objects.create(
+            device_type="Laptop",
+            brand="Dell",
+            model="Latitude",
+            serial_number="SN-DUP-1",
+            company_tag="TAG-DUP-1",
+        )
+        session = InventorySession.objects.create(
+            branch=self.branch,
+            start_date="2026-05-06T10:00:00Z",
+            created_by=self.head_office,
+        )
+
+        response = self.client.post(
+            f"/api/inventory-sessions/{session.id}/register_found_device/",
+            {
+                "device_type": "Laptop",
+                "brand": "Dell",
+                "model": "Latitude",
+                "serial_number": "SN-DUP-1",
+                "company_tag": "TAG-NEW-DUP",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("serial_number", response.data)
 
     def test_technician_can_render_pages_and_complete_repair(self):
         technician = User.objects.create_user(
