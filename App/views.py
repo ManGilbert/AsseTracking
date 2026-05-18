@@ -84,6 +84,17 @@ from .services import (
 
 DEACTIVATED_ACCOUNT_MESSAGE = "Your account has been deactivated. Please contact the administrator."
 
+DEFAULT_DEPARTMENT_NAMES = [
+    "Human Resources",
+    "Finance",
+    "Operations",
+    "Information Technology",
+    "Logistics",
+    "Procurement",
+    "Customer Service",
+    "Maintenance",
+]
+
 
 def _notify_user(user, message):
     if user:
@@ -171,7 +182,9 @@ class BranchViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         branch = serializer.save()
-        for name in Department.objects.values_list("name", flat=True).distinct():
+        existing_department_names = list(Department.objects.values_list("name", flat=True).distinct())
+        department_names = existing_department_names or DEFAULT_DEPARTMENT_NAMES
+        for name in department_names:
             Department.objects.get_or_create(branch=branch, name=name)
         AuditService.log_action(
             self.request.user,

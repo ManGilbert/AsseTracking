@@ -196,8 +196,8 @@
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Department</label>
-                        <select class="form-select" id="departmentId">
+                        <label class="form-label">Department <span class="text-danger">*</span></label>
+                        <select class="form-select" id="departmentId" required>
                             <option value="">Select Department</option>
                         </select>
                     </div>
@@ -266,9 +266,9 @@
                         </select>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Department</label>
-                        <select class="form-select" id="editDepartmentId">
-                            <option value="">No department</option>
+                        <label class="form-label">Department <span class="text-danger">*</span></label>
+                        <select class="form-select" id="editDepartmentId" required>
+                            <option value="">Select Department</option>
                         </select>
                     </div>
                 </div>
@@ -287,9 +287,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('branchId').addEventListener('change', function() {
         loadDepartments(this.value, 'departmentId');
     });
-    document.getElementById('loginRole').addEventListener('change', updateRoleBranchRequirement);
-    updateRoleBranchRequirement();
-    
     document.getElementById('editBranchId').addEventListener('change', function() {
         loadDepartments(this.value, 'editDepartmentId');
     });
@@ -317,25 +314,11 @@ function loadDepartments(branchId, targetSelectId) {
         .then(response => response.json())
         .then(data => {
             const select = document.getElementById(targetSelectId);
-            select.innerHTML = '<option value="">No department</option>';
+            select.innerHTML = '<option value="">Select Department</option>';
             data.results.forEach(dept => {
                 select.innerHTML += `<option value="${dept.id}">${dept.name}</option>`;
             });
         });
-}
-
-function updateRoleBranchRequirement() {
-    const role = document.getElementById('loginRole').value;
-    const branch = document.getElementById('branchId');
-    const department = document.getElementById('departmentId');
-    const isTechnician = role === 'TECHNICIAN';
-    branch.required = !isTechnician;
-    department.disabled = isTechnician;
-    if (isTechnician) {
-        branch.value = '';
-        department.value = '';
-        loadDepartments('', 'departmentId');
-    }
 }
 
 function loadEmployee(employeeId) {

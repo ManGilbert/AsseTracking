@@ -160,12 +160,14 @@ class EmployeeSerializer(serializers.ModelSerializer):
             if errors:
                 raise serializers.ValidationError(errors)
 
-        login_role = attrs.get("login_role", "EMPLOYEE")
         branch = attrs.get("branch") or getattr(self.instance, "branch", None)
-        if login_role != "TECHNICIAN" and self.instance is None and not branch:
+        if not branch:
             raise serializers.ValidationError({"branch": "Branch is required."})
 
-        department = attrs.get("department")
+        department = attrs.get("department") or getattr(self.instance, "department", None)
+        if not department:
+            raise serializers.ValidationError({"department": "Department is required."})
+
         if department and branch and department.branch_id != branch.id:
             raise serializers.ValidationError(
                 {"department": "Department must belong to the selected branch."}
