@@ -88,6 +88,7 @@
                                     <th>Status</th>
                                     <th>Assigned To</th>
                                     <th>Branch</th>
+                                    <th>Purchase Date</th>
                                     <th class="text-end">Actions</th>
                                 </tr>
                             </thead>
@@ -128,21 +129,27 @@
                                         {{ device.purchase_date|date:"M d, Y"|default:"—" }}
                                     </td>
                                     <td class="text-end">
-                                        <div class="hstack gap-1 justify-content-end">
-                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editDeviceModal"
-                                                    onclick="loadDevice({{ device.id }})">
-                                                <i class="feather-edit"></i>
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#viewDeviceModal"
-                                                    onclick="viewDeviceDetails({{ device.id }})">
-                                                <i class="feather-eye"></i>
-                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#viewDeviceModal" onclick="viewDeviceDetails({{ device.id }})">
+                                                    <i class="feather-eye"></i>View details
+                                                </button>
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editDeviceModal" onclick="loadDevice({{ device.id }})">
+                                                    <i class="feather-edit"></i>Edit device
+                                                </button>
+                                                <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ device.company_tag|urlencode }}&device={{ device.id }}">
+                                                    <i class="feather-clock"></i>Audit lifecycle
+                                                </a>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">
+                                    <td colspan="8" class="text-center text-muted py-4">
                                         No devices found
                                     </td>
                                 </tr>

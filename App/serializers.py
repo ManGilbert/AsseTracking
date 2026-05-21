@@ -268,6 +268,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "company_tag",
             "purchase_date",
             "warranty_expiry",
+            "registered_at",
             "status",
             "assigned_employee",
             "assigned_employee_name",
@@ -278,7 +279,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "condition_notes",
             "days_assigned",
         )
-        read_only_fields = ("id", "days_assigned")
+        read_only_fields = ("id", "registered_at", "days_assigned")
 
     def get_days_assigned(self, obj):
         """Calculate days since assignment."""
@@ -334,12 +335,13 @@ class DeviceListSerializer(serializers.ModelSerializer):
             "model",
             "serial_number",
             "company_tag",
+            "registered_at",
             "status",
             "assigned_branch",
             "assigned_branch_name",
             "location_type",
         )
-        read_only_fields = ("id",)
+        read_only_fields = ("id", "registered_at")
 
 
 # =========================

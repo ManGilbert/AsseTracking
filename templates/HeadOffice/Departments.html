@@ -35,9 +35,16 @@
                             <td><strong>{{ department.name }}</strong></td>
                             <td>{{ department.branch_count }} of {{ branch_count }}</td>
                             <td class="text-end">
-                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editDepartmentModal" onclick="openEditDepartmentModal({{ department.first_id }}, '{{ department.name|escapejs }}')" title="Edit department">
-                                    <i class="feather-edit"></i>
-                                </button>
+                                <div class="dropdown action-menu">
+                                    <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                        <i class="feather-more-horizontal"></i>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editDepartmentModal" onclick="openEditDepartmentModal({{ department.first_id }}, '{{ department.name|escapejs }}')">
+                                            <i class="feather-edit"></i>Edit department
+                                        </button>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     {% empty %}

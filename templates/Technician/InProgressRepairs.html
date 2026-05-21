@@ -32,10 +32,16 @@
                             <td><span class="badge bg-warning text-dark">{{ repair.device.status }}</span></td>
                             <td>{{ repair.request_date|date:"M d, Y" }}</td>
                             <td class="text-end">
-                                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#completeRepairModal"
-                                        onclick="prepareCompleteRepair({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
-                                    <i class="feather-check me-1"></i>Complete
-                                </button>
+                                <div class="dropdown action-menu">
+                                    <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                        <i class="feather-more-horizontal"></i>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#completeRepairModal" onclick="prepareCompleteRepair({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
+                                            <i class="feather-check"></i>Complete repair
+                                        </button>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}

@@ -39,9 +39,16 @@
                             <td>{{ repair.request_date|date:"M d, Y H:i" }}</td>
                             <td>{{ repair.approved_by.username|default:"-" }}</td>
                             <td class="text-end">
-                                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#employeeRepairHistory{{ repair.id }}">
-                                    <i class="feather-eye"></i>
-                                </button>
+                                <div class="dropdown action-menu">
+                                    <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                        <i class="feather-more-horizontal"></i>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#employeeRepairHistory{{ repair.id }}">
+                                            <i class="feather-eye"></i>View details
+                                        </button>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}

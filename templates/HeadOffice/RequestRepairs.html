@@ -111,17 +111,24 @@
                                     </td>
                                     <td>{{ repair.request_date|date:"M d, H:i" }}</td>
                                     <td class="text-end">
-                                        <div class="hstack gap-1 justify-content-end">
-                                            <button class="btn btn-sm btn-outline-success" onclick="openApproveRepairModal({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
-                                                <i class="feather-check me-1"></i>Approve
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="rejectRepair({{ repair.id }})">
-                                                <i class="feather-x me-1"></i>Reject
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#repairModal"
-                                                    onclick="openEditRepairModal({{ repair.id }}, {{ repair.device.id }}, {{ repair.employee.id }}, '{{ repair.priority|escapejs }}', '{{ repair.issue_description|escapejs }}')">
-                                                <i class="feather-edit"></i>
-                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <button class="dropdown-item" type="button" onclick="openApproveRepairModal({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
+                                                    <i class="feather-check"></i>Approve
+                                                </button>
+                                                <button class="dropdown-item text-danger" type="button" onclick="rejectRepair({{ repair.id }})">
+                                                    <i class="feather-x"></i>Reject
+                                                </button>
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#repairModal" onclick="openEditRepairModal({{ repair.id }}, {{ repair.device.id }}, {{ repair.employee.id }}, '{{ repair.priority|escapejs }}', '{{ repair.issue_description|escapejs }}')">
+                                                    <i class="feather-edit"></i>Edit repair
+                                                </button>
+                                                <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ repair.device.company_tag|urlencode }}&device={{ repair.device.id }}">
+                                                    <i class="feather-clock"></i>Audit device
+                                                </a>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -162,10 +169,18 @@
                                     <td>{{ repair.issue_description|truncatechars:50 }}</td>
                                     <td>{{ repair.request_date|date:"M d, H:i" }}</td>
                                     <td class="text-end">
-                                        <div class="hstack gap-1 justify-content-end">
-                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}">
-                                                <i class="feather-eye"></i>
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
                                             </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}">
+                                                    <i class="feather-eye"></i>View details
+                                                </button>
+                                                <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ repair.device.company_tag|urlencode }}&device={{ repair.device.id }}">
+                                                    <i class="feather-clock"></i>Audit device
+                                                </a>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -206,10 +221,18 @@
                                     <td><span class="badge bg-warning">{{ repair.priority }}</span></td>
                                     <td>{{ repair.request_date|date:"M d, H:i" }}</td>
                                     <td class="text-end">
-                                        <div class="hstack gap-1 justify-content-end">
-                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}">
-                                                <i class="feather-eye"></i>
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
                                             </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}">
+                                                    <i class="feather-eye"></i>View details
+                                                </button>
+                                                <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ repair.device.company_tag|urlencode }}&device={{ repair.device.id }}">
+                                                    <i class="feather-clock"></i>Audit device
+                                                </a>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -248,13 +271,21 @@
                                     <td>{{ repair.issue_description|truncatechars:50 }}</td>
                                     <td>{{ repair.request_date|date:"M d, H:i" }}</td>
                                     <td class="text-end">
-                                        <div class="hstack gap-1 justify-content-end">
-                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}" title="View details">
-                                                <i class="feather-eye"></i>
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-success" onclick="reassignCompletedRepair({{ repair.id }})">
-                                                <i class="feather-repeat me-1"></i>Reassign
-                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#repairHistory{{ repair.id }}">
+                                                    <i class="feather-eye"></i>View details
+                                                </button>
+                                                <button class="dropdown-item" type="button" onclick="reassignCompletedRepair({{ repair.id }})">
+                                                    <i class="feather-repeat"></i>Reassign
+                                                </button>
+                                                <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ repair.device.company_tag|urlencode }}&device={{ repair.device.id }}">
+                                                    <i class="feather-clock"></i>Audit device
+                                                </a>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>

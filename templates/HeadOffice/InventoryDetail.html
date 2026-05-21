@@ -120,13 +120,21 @@
                                             <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
                                             <td>{{ item.comment|default:"-" }}</td>
                                             <td class="text-end">
-                                                {% if session.is_active %}
-                                                <button type="button" class="btn btn-sm btn-outline-primary audit-device-btn">
-                                                    <i class="feather-clipboard me-1"></i>Audit
-                                                </button>
-                                                {% else %}
-                                                <span class="text-muted small">Closed</span>
-                                                {% endif %}
+                                                <div class="dropdown action-menu">
+                                                    <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                        <i class="feather-more-horizontal"></i>
+                                                    </button>
+                                                    <div class="dropdown-menu dropdown-menu-end">
+                                                        {% if session.is_active %}
+                                                        <button type="button" class="dropdown-item audit-device-btn">
+                                                            <i class="feather-clipboard"></i>Audit item
+                                                        </button>
+                                                        {% endif %}
+                                                        <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ item.device.company_tag|urlencode }}&device={{ item.device.id }}">
+                                                            <i class="feather-clock"></i>Device lifecycle
+                                                        </a>
+                                                    </div>
+                                                </div>
                                             </td>
                                         </tr>
                                     {% empty %}

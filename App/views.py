@@ -1459,6 +1459,232 @@ def _attach_repair_activity(repairs):
     return repair_list
 
 
+def _device_audit_timeline(device):
+    assignments = list(
+        DeviceAssignment.objects.select_related(
+            "employee", "employee__branch", "branch", "assigned_by", "received_by"
+        )
+        .filter(device=device)
+        .order_by("assigned_date")
+    )
+    repairs = list(
+        RepairRequest.objects.select_related(
+            "employee", "approved_by", "repairlog", "repairlog__technician"
+        )
+        .filter(device=device)
+        .order_by("request_date")
+    )
+    inventory_items = list(
+        InventoryItem.objects.select_related("session", "session__branch", "session__created_by")
+        .filter(device=device)
+        .order_by("session__start_date")
+    )
+
+    assignment_ids = [assignment.id for assignment in assignments]
+    repair_ids = [repair.id for repair in repairs]
+    repair_log_ids = [
+        repair.repairlog.id
+        for repair in repairs
+        if hasattr(repair, "repairlog") and repair.repairlog
+    ]
+    inventory_item_ids = [item.id for item in inventory_items]
+
+    audit_logs = list(
+        AuditLog.objects.select_related("user")
+        .filter(
+            Q(model_name="Device", object_id=device.id)
+            | Q(model_name="DeviceAssignment", object_id__in=assignment_ids)
+            | Q(model_name="RepairRequest", object_id__in=repair_ids)
+            | Q(model_name="RepairLog", object_id__in=repair_log_ids)
+            | Q(model_name="InventoryItem", object_id__in=inventory_item_ids)
+            | Q(details__icontains=device.company_tag)
+            | Q(details__icontains=device.serial_number)
+        )
+        .order_by("timestamp")
+    )
+
+    timeline = [
+        {
+            "timestamp": device.registered_at,
+            "title": "Device registered",
+            "description": f"{device.device_type} {device.brand} {device.model} was added to the system.",
+            "badge": "Registered",
+            "user": "System",
+            "details": [
+                ("Company tag", device.company_tag),
+                ("Serial number", device.serial_number),
+                ("Initial status", device.get_status_display()),
+                ("Initial location", device.current_location),
+            ],
+        }
+    ]
+
+    for assignment in assignments:
+        timeline.append(
+            {
+                "timestamp": assignment.assigned_date,
+                "title": "Device assigned",
+                "description": f"Assigned to {assignment.employee.full_name if assignment.employee else 'Unknown employee'}.",
+                "badge": "Assignment",
+                "user": assignment.assigned_by.username if assignment.assigned_by else "System",
+                "details": [
+                    ("Employee", assignment.employee.full_name if assignment.employee else "-"),
+                    ("Branch", assignment.branch.name if assignment.branch else "-"),
+                    ("Assigned by", assignment.assigned_by.username if assignment.assigned_by else "-"),
+                    ("Condition on issue", assignment.condition_on_issue or "-"),
+                ],
+            }
+        )
+        if assignment.returned_date:
+            timeline.append(
+                {
+                    "timestamp": assignment.returned_date,
+                    "title": "Device returned",
+                    "description": f"Returned by {assignment.employee.full_name if assignment.employee else 'Unknown employee'}.",
+                    "badge": "Return",
+                    "user": assignment.received_by.username if assignment.received_by else "System",
+                    "details": [
+                        ("Received by", assignment.received_by.username if assignment.received_by else "-"),
+                        ("Condition on return", assignment.condition_on_return or "-"),
+                    ],
+                }
+            )
+
+    for repair in repairs:
+        repair_log = repair.repairlog if hasattr(repair, "repairlog") else None
+        timeline.append(
+            {
+                "timestamp": repair.request_date,
+                "title": "Repair requested",
+                "description": repair.issue_description,
+                "badge": repair.status,
+                "user": repair.employee.full_name if repair.employee else "System",
+                "details": [
+                    ("Employee", repair.employee.full_name if repair.employee else "-"),
+                    ("Priority", repair.priority),
+                    ("Approved by", repair.approved_by.username if repair.approved_by else "-"),
+                    ("Technician", repair_log.technician.username if repair_log and repair_log.technician else "-"),
+                    ("Repair notes", repair_log.notes if repair_log else "-"),
+                    ("Parts used", repair_log.parts_used if repair_log and repair_log.parts_used else "-"),
+                ],
+            }
+        )
+        if repair_log:
+            timeline.append(
+                {
+                    "timestamp": repair_log.start_date,
+                    "title": "Repair work started",
+                    "description": repair_log.notes or repair.issue_description,
+                    "badge": "Repair",
+                    "user": repair_log.technician.username if repair_log.technician else "System",
+                    "details": [
+                        ("Technician", repair_log.technician.username if repair_log.technician else "-"),
+                        ("Parts used", repair_log.parts_used or "-"),
+                    ],
+                }
+            )
+            if repair_log.completed_date:
+                timeline.append(
+                    {
+                        "timestamp": repair_log.completed_date,
+                        "title": "Repair completed",
+                        "description": repair_log.notes or "Repair completed.",
+                        "badge": "Completed",
+                        "user": repair_log.technician.username if repair_log.technician else "System",
+                        "details": [
+                            ("Final device status", device.get_status_display()),
+                            ("Parts used", repair_log.parts_used or "-"),
+                        ],
+                    }
+                )
+
+    for item in inventory_items:
+        timeline.append(
+            {
+                "timestamp": item.session.start_date,
+                "title": "Inventory verification",
+                "description": item.comment or f"Inventory status recorded as {item.status}.",
+                "badge": item.status,
+                "user": item.session.created_by.username if item.session.created_by else "System",
+                "details": [
+                    ("Branch", item.session.branch.name if item.session.branch else "-"),
+                    ("Inventory status", item.get_status_display()),
+                    ("Comment", item.comment or "-"),
+                ],
+            }
+        )
+
+    for audit in audit_logs:
+        timeline.append(
+            {
+                "timestamp": audit.timestamp,
+                "title": audit.action.replace("_", " ").title(),
+                "description": audit.details or "-",
+                "badge": "Audit",
+                "user": audit.user.username if audit.user else "System",
+                "details": [
+                    ("Model", audit.model_name),
+                    ("Object ID", audit.object_id or "-"),
+                ],
+            }
+        )
+
+    return sorted(timeline, key=lambda item: item["timestamp"] or timezone.now())
+
+
+def _device_audit_context(request):
+    query = request.GET.get("q", "").strip()
+    devices = Device.objects.select_related("assigned_employee", "assigned_branch").none()
+    selected_device = None
+    timeline = []
+    assignments = DeviceAssignment.objects.none()
+    repairs = RepairRequest.objects.none()
+    audit_logs = AuditLog.objects.none()
+
+    if query:
+        devices = (
+            Device.objects.select_related("assigned_employee", "assigned_branch")
+            .filter(
+                Q(company_tag__icontains=query)
+                | Q(serial_number__icontains=query)
+                | Q(assigned_employee__full_name__icontains=query)
+                | Q(assignments__employee__full_name__icontains=query)
+            )
+            .distinct()
+            .order_by("company_tag")
+        )
+        selected_device_id = request.GET.get("device")
+        if selected_device_id:
+            selected_device = get_object_or_404(devices, id=selected_device_id)
+        else:
+            exact_match = devices.filter(Q(company_tag__iexact=query) | Q(serial_number__iexact=query)).first()
+            selected_device = exact_match or (devices.first() if devices.count() == 1 else None)
+
+    if selected_device:
+        timeline = _device_audit_timeline(selected_device)
+        assignments = selected_device.assignments.select_related(
+            "employee", "branch", "assigned_by", "received_by"
+        ).order_by("-assigned_date")
+        repairs = RepairRequest.objects.select_related(
+            "employee", "approved_by", "repairlog", "repairlog__technician"
+        ).filter(device=selected_device).order_by("-request_date")
+        audit_logs = AuditLog.objects.select_related("user").filter(
+            Q(model_name="Device", object_id=selected_device.id)
+            | Q(details__icontains=selected_device.company_tag)
+            | Q(details__icontains=selected_device.serial_number)
+        ).order_by("-timestamp")
+
+    return {
+        "query": query,
+        "matching_devices": devices,
+        "selected_device": selected_device,
+        "timeline": timeline,
+        "assignments": assignments,
+        "repairs": repairs,
+        "audit_logs": audit_logs,
+    }
+
+
 def home_view(request):
     """Root view: redirect to login if not authenticated, dashboard if authenticated."""
     if request.user.is_authenticated:
@@ -1955,6 +2181,13 @@ def head_office_repairs(request):
         'technicians': User.objects.select_related('employee').filter(role='TECHNICIAN', is_active=True).order_by('employee__full_name', 'username'),
     }
     return render(request, "HeadOffice/RequestRepairs.html", context)
+
+
+@login_required
+@role_required("HEAD_OFFICE")
+def head_office_audit_device(request):
+    """Full lifecycle audit view for a device."""
+    return render(request, "HeadOffice/AuditDevice.html", _device_audit_context(request))
 
 
 @login_required

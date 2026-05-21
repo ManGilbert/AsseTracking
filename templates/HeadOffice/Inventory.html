@@ -71,19 +71,26 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
-                                        <a class="btn btn-sm btn-outline-primary" href="{% url 'head_office_inventory_detail' session.id %}">
-                                            <i class="feather-eye me-1"></i>View
-                                        </a>
-                                        {% if not session.approved_by_head_office %}
-                                        <button class="btn btn-sm btn-outline-success" onclick="approveInventorySession({{ session.id }})">
-                                            <i class="feather-check me-1"></i>Approve
-                                        </button>
-                                        {% endif %}
-                                        {% if not session.end_date %}
-                                        <button class="btn btn-sm btn-outline-secondary" onclick="closeInventorySession({{ session.id }})">
-                                            <i class="feather-lock me-1"></i>Close
-                                        </button>
-                                        {% endif %}
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
+                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <a class="dropdown-item" href="{% url 'head_office_inventory_detail' session.id %}">
+                                                    <i class="feather-eye"></i>View details
+                                                </a>
+                                                {% if not session.approved_by_head_office %}
+                                                <button class="dropdown-item" type="button" onclick="approveInventorySession({{ session.id }})">
+                                                    <i class="feather-check"></i>Approve
+                                                </button>
+                                                {% endif %}
+                                                {% if not session.end_date %}
+                                                <button class="dropdown-item" type="button" onclick="closeInventorySession({{ session.id }})">
+                                                    <i class="feather-lock"></i>Close session
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% empty %}

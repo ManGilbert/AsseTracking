@@ -122,16 +122,20 @@
                                         </span>
                                     </td>
                                     <td class="text-end">
-                                        <div class="hstack gap-1 justify-content-end">
-                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editEmployeeModal" 
-                                                    onclick="loadEmployee({{ employee.id }})">
-                                                <i class="feather-edit"></i>
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
                                             </button>
-                                            {% if employee.status != 'EXITED' %}
-                                            <button class="btn btn-sm btn-outline-danger" onclick="markEmployeeExited({{ employee.id }})">
-                                                <i class="feather-log-out"></i>
-                                            </button>
-                                            {% endif %}
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editEmployeeModal" onclick="loadEmployee({{ employee.id }})">
+                                                    <i class="feather-edit"></i>Edit employee
+                                                </button>
+                                                {% if employee.status != 'EXITED' %}
+                                                <button class="dropdown-item text-danger" type="button" onclick="markEmployeeExited({{ employee.id }})">
+                                                    <i class="feather-log-out"></i>Mark exited
+                                                </button>
+                                                {% endif %}
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>

@@ -101,10 +101,19 @@
                                         <small class="text-muted">{{ assignment.condition_on_issue|truncatechars:30 }}</small>
                                     </td>
                                     <td class="text-end">
-                                        <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#returnDeviceModal"
-                                                onclick="loadAssignment({{ assignment.id }})">
-                                            <i class="feather-check me-1"></i>Return
-                                        </button>
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
+                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#returnDeviceModal" onclick="loadAssignment({{ assignment.id }})">
+                                                    <i class="feather-check"></i>Return device
+                                                </button>
+                                                <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ assignment.device.company_tag|urlencode }}&device={{ assignment.device.id }}">
+                                                    <i class="feather-clock"></i>Audit lifecycle
+                                                </a>
+                                            </div>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% empty %}
@@ -153,7 +162,18 @@
                                         {{ assignment.returned_date|timeuntil:assignment.assigned_date }}
                                         {% endif %}
                                     </td>
-                                    <td class="text-end text-muted">-</td>
+                                    <td class="text-end">
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
+                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ assignment.device.company_tag|urlencode }}&device={{ assignment.device.id }}">
+                                                    <i class="feather-clock"></i>Audit lifecycle
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </td>
                                 </tr>
                                 {% empty %}
                                 <tr>

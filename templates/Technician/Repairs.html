@@ -35,10 +35,16 @@
                             <td><span class="badge bg-warning text-dark">{{ repair.priority }}</span></td>
                             <td>{{ repair.request_date|date:"M d, Y H:i" }}</td>
                             <td class="text-end">
-                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#startRepairModal"
-                                        onclick="prepareStartRepair({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
-                                    <i class="feather-check-circle me-1"></i>Received
-                                </button>
+                                <div class="dropdown action-menu">
+                                    <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                        <i class="feather-more-horizontal"></i>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-end">
+                                        <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#startRepairModal" onclick="prepareStartRepair({{ repair.id }}, '{{ repair.device.company_tag|escapejs }}')">
+                                            <i class="feather-check-circle"></i>Receive repair
+                                        </button>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}

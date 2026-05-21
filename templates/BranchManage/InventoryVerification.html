@@ -15,13 +15,20 @@
                 <h5 class="card-title mb-0">{{ session.branch.name }} Inventory</h5>
                 <div class="text-muted small">{{ session.start_date|date:"M d, Y H:i" }} - {{ session.end_date|date:"M d, Y H:i"|default:"In progress" }}</div>
             </div>
-            {% if not session.approved_by_branch %}
-            <button class="btn btn-sm btn-success" onclick="approveBranchInventory({{ session.id }})">
-                <i class="feather-check me-1"></i>Approve Branch Inventory
-            </button>
-            {% else %}
-            <span class="badge bg-success">Approved by Branch</span>
-            {% endif %}
+            <div class="dropdown action-menu">
+                <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                    <i class="feather-more-horizontal"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    {% if not session.approved_by_branch %}
+                    <button class="dropdown-item" type="button" onclick="approveBranchInventory({{ session.id }})">
+                        <i class="feather-check"></i>Approve inventory
+                    </button>
+                    {% else %}
+                    <span class="dropdown-item-text text-success">Approved by Branch</span>
+                    {% endif %}
+                </div>
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">

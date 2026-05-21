@@ -167,6 +167,7 @@ class Device(models.Model):
     current_location = models.CharField(max_length=255, default="Head Office")
 
     condition_notes = models.TextField(blank=True)
+    registered_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.device_type} - {self.company_tag}"

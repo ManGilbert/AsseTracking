@@ -67,14 +67,18 @@
                                         <span class="badge bg-light text-dark">{{ branch.employees.count }}</span>
                                     </td>
                                     <td class="text-end">
-                                        <div class="hstack gap-1 justify-content-end">
-                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editBranchModal"
-                                                    onclick="loadBranch({{ branch.id }})">
-                                                <i class="feather-edit"></i>
+                                        <div class="dropdown action-menu">
+                                            <button class="btn btn-sm btn-outline-secondary action-menu-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Actions">
+                                                <i class="feather-more-horizontal"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-secondary" onclick="expandBranchDetails({{ branch.id }})">
-                                                <i class="feather-chevron-down"></i>
-                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end">
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editBranchModal" onclick="loadBranch({{ branch.id }})">
+                                                    <i class="feather-edit"></i>Edit branch
+                                                </button>
+                                                <button class="dropdown-item" type="button" onclick="expandBranchDetails({{ branch.id }})">
+                                                    <i class="feather-chevron-down"></i>Toggle details
+                                                </button>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
