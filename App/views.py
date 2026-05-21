@@ -55,6 +55,7 @@ from .serializers import (
     InventoryItemSerializer,
     NotificationSerializer,
     AuditLogSerializer,
+    DEFAULT_EMPLOYEE_PASSWORD,
 )
 
 from .permissions import (
@@ -317,6 +318,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     - create: Create employee (HEAD_OFFICE only)
     - retrieve: Get employee details
     - set_exit_status: Mark employee as exited (HEAD_OFFICE only)
+    - reset_password: Reset employee login to default password (HEAD_OFFICE only)
     """
 
     queryset = Employee.objects.all()
@@ -342,6 +344,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             "partial_update",
             "destroy",
             "set_exit_status",
+            "reset_password",
         ]:
             return [IsHeadOffice()]
         return [IsAuthenticated()]
@@ -427,6 +430,41 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             {
                 "message": f"Employee marked as exited. {len(affected_devices)} devices marked for return.",
                 "affected_devices": len(affected_devices),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
+    def reset_password(self, request, pk=None):
+        """
+        Reset an employee login password to the system default.
+
+        POST /api/employees/{id}/reset_password/
+        """
+        employee = self.get_object()
+        if not employee.user:
+            return Response(
+                {"error": "This employee does not have a login account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        employee.user.set_password(DEFAULT_EMPLOYEE_PASSWORD)
+        employee.user.must_change_password = True
+        employee.user.save(update_fields=["password", "must_change_password"])
+
+        AuditService.log_action(
+            request.user,
+            "EMPLOYEE_PASSWORD_RESET",
+            "Employee",
+            employee.id,
+            f"Password reset for employee: {employee.full_name}; username: {employee.user.username}",
+        )
+
+        return Response(
+            {
+                "message": "Employee password reset successfully. The employee must change it before accessing the system.",
+                "default_password": DEFAULT_EMPLOYEE_PASSWORD,
+                "must_change_password": True,
             },
             status=status.HTTP_200_OK,
         )

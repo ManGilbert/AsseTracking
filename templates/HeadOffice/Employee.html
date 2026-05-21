@@ -130,6 +130,11 @@
                                                 <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editEmployeeModal" onclick="loadEmployee({{ employee.id }})">
                                                     <i class="feather-edit"></i>Edit employee
                                                 </button>
+                                                {% if employee.user %}
+                                                <button class="dropdown-item" type="button" onclick="resetEmployeePassword({{ employee.id }}, '{{ employee.full_name|escapejs }}')">
+                                                    <i class="feather-key"></i>Reset password
+                                                </button>
+                                                {% endif %}
                                                 {% if employee.status != 'EXITED' %}
                                                 <button class="dropdown-item text-danger" type="button" onclick="markEmployeeExited({{ employee.id }})">
                                                     <i class="feather-log-out"></i>Mark exited
@@ -407,6 +412,30 @@ async function markEmployeeExited(employeeId) {
     .then(response => response.json())
     .then(data => {
         showAppMessage(data.message || 'Employee exit status updated successfully.', 'Success', 'success').then(() => location.reload());
+    });
+}
+
+async function resetEmployeePassword(employeeId, employeeName) {
+    if (!(await showAppConfirm(`Reset password for ${employeeName} to the default password?`, 'Reset Password'))) return;
+
+    fetch(`/api/employees/${employeeId}/reset_password/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json().then(data => {
+                showAppMessage(
+                    `Password reset successfully.\n\nDefault password: ${data.default_password}\n\nThe employee must change this password before accessing the system.`,
+                    'Password Reset',
+                    'success'
+                ).then(() => location.reload());
+            });
+        }
+        response.json().then(e => showAppMessage(getApiError(e, 'Error resetting password'), 'Error', 'error'));
     });
 }
 
