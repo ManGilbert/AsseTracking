@@ -70,7 +70,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0" id="employeesTable">
+                        <table class="table table-hover table-sm align-middle mb-0" id="employeesTable">
                             <thead class="table-light">
                                 <tr>
                                     <th scope="col">Name</th>
@@ -118,11 +118,7 @@
                                         {% endfor %}
                                     </td>
                                     <td>
-                                        <span class="badge 
-                                            {% if employee.status == 'ACTIVE' %}bg-success
-                                            {% elif employee.status == 'INACTIVE' %}bg-warning
-                                            {% elif employee.status == 'EXITED' %}bg-danger
-                                            {% endif %}">
+                                        <span>
                                             {{ employee.get_status_display }}
                                         </span>
                                     </td>

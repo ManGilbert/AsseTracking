@@ -94,13 +94,13 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover table-sm align-middle mb-0">
                             <thead class="table-light"><tr><th>User</th><th>Action</th><th>Time</th></tr></thead>
                             <tbody>
                             {% for audit in recent_audits %}
                                 <tr>
                                     <td>{{ audit.user.username|default:"System" }}</td>
-                                    <td><span class="badge bg-info">{{ audit.action }}</span></td>
+                                    <td><span>{{ audit.action }}</span></td>
                                     <td><small class="text-muted">{{ audit.timestamp|date:"M d, H:i" }}</small></td>
                                 </tr>
                             {% empty %}
@@ -120,14 +120,14 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover table-sm align-middle mb-0">
                             <thead class="table-light"><tr><th>Device</th><th>Employee</th><th>Status</th><th>Date</th></tr></thead>
                             <tbody>
                             {% for repair in recent_repairs %}
                                 <tr>
                                     <td>{{ repair.device.company_tag }}</td>
                                     <td>{{ repair.employee.full_name }}</td>
-                                    <td><span class="badge bg-light text-dark">{{ repair.status }}</span></td>
+                                    <td><span>{{ repair.status }}</span></td>
                                     <td><small class="text-muted">{{ repair.request_date|date:"M d, H:i" }}</small></td>
                                 </tr>
                             {% empty %}

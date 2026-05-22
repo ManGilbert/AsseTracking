@@ -18,17 +18,17 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0" id="deviceLookupTable">
+                <table class="table table-hover table-sm align-middle mb-0" id="deviceLookupTable">
                     <thead class="table-light">
                         <tr><th>Tag</th><th>Device</th><th>Serial</th><th>Status</th><th>Assigned Employee</th><th>Branch</th><th>Location</th></tr>
                     </thead>
                     <tbody>
                         {% for device in devices %}
                         <tr>
-                            <td><span class="badge bg-info">{{ device.company_tag }}</span></td>
+                            <td><span>{{ device.company_tag }}</span></td>
                             <td>{{ device.device_type }}<div class="small text-muted">{{ device.brand }} {{ device.model }}</div></td>
                             <td>{{ device.serial_number }}</td>
-                            <td><span class="badge bg-light text-dark">{{ device.status }}</span></td>
+                            <td><span>{{ device.status }}</span></td>
                             <td>{{ device.assigned_employee.full_name|default:"-" }}</td>
                             <td>{{ device.assigned_branch.name|default:"-" }}</td>
                             <td>{{ device.current_location }}</td>

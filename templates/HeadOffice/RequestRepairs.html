@@ -87,7 +87,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover table-sm align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th>Device</th>
@@ -101,11 +101,11 @@
                             <tbody>
                                 {% for repair in repairs_by_status.PENDING %}
                                 <tr>
-                                    <td><strong class="badge bg-info">{{ repair.device.company_tag }}</strong></td>
+                                    <td><strong>{{ repair.device.company_tag }}</strong></td>
                                     <td>{{ repair.employee.full_name }}</td>
                                     <td>{{ repair.issue_description|truncatechars:50 }}</td>
                                     <td>
-                                        <span class="badge {% if repair.priority == 'HIGH' %}bg-danger{% else %}bg-info{% endif %}">
+                                        <span>
                                             {{ repair.priority }}
                                         </span>
                                     </td>
@@ -149,7 +149,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover table-sm align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th>Device</th>
@@ -163,7 +163,7 @@
                             <tbody>
                                 {% for repair in repairs_by_status.APPROVED %}
                                 <tr>
-                                    <td><strong class="badge bg-info">{{ repair.device.company_tag }}</strong></td>
+                                    <td><strong>{{ repair.device.company_tag }}</strong></td>
                                     <td>{{ repair.employee.full_name }}</td>
                                     <td>{{ repair.approved_by.username }}</td>
                                     <td>{{ repair.issue_description|truncatechars:50 }}</td>
@@ -201,7 +201,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover table-sm align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th>Device</th>
@@ -215,10 +215,10 @@
                             <tbody>
                                 {% for repair in repairs_by_status.IN_PROGRESS %}
                                 <tr>
-                                    <td><strong class="badge bg-warning">{{ repair.device.company_tag }}</strong></td>
+                                    <td><strong>{{ repair.device.company_tag }}</strong></td>
                                     <td>{{ repair.employee.full_name }}</td>
                                     <td>{{ repair.issue_description|truncatechars:50 }}</td>
-                                    <td><span class="badge bg-warning">{{ repair.priority }}</span></td>
+                                    <td><span>{{ repair.priority }}</span></td>
                                     <td>{{ repair.request_date|date:"M d, H:i" }}</td>
                                     <td class="text-end">
                                         <div class="dropdown action-menu">
@@ -253,7 +253,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0">
+                        <table class="table table-hover table-sm align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th>Device</th>
@@ -266,7 +266,7 @@
                             <tbody>
                                 {% for repair in repairs_by_status.COMPLETED %}
                                 <tr>
-                                    <td><strong class="badge bg-success">{{ repair.device.company_tag }}</strong></td>
+                                    <td><strong>{{ repair.device.company_tag }}</strong></td>
                                     <td>{{ repair.employee.full_name }}</td>
                                     <td>{{ repair.issue_description|truncatechars:50 }}</td>
                                     <td>{{ repair.request_date|date:"M d, H:i" }}</td>

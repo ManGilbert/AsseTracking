@@ -18,14 +18,14 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0" id="completedTable">
+                <table class="table table-hover table-sm align-middle mb-0" id="completedTable">
                     <thead class="table-light">
                         <tr><th>Device</th><th>Employee</th><th>Technician</th><th>Notes</th><th>Parts Used</th><th>Completed</th></tr>
                     </thead>
                     <tbody>
                         {% for log in repair_logs %}
                         <tr>
-                            <td><span class="badge bg-secondary">{{ log.repair_request.device.company_tag }}</span><div class="small text-muted">{{ log.repair_request.device.brand }} {{ log.repair_request.device.model }}</div></td>
+                            <td><span>{{ log.repair_request.device.company_tag }}</span><div class="small text-muted">{{ log.repair_request.device.brand }} {{ log.repair_request.device.model }}</div></td>
                             <td>{{ log.repair_request.employee.full_name }}</td>
                             <td>{{ log.technician.username|default:"-" }}</td>
                             <td>{{ log.notes|truncatechars:100 }}</td>

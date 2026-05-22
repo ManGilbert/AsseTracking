@@ -81,7 +81,7 @@
                     <div id="departmentPanel{{ forloop.counter }}" class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" aria-labelledby="departmentHeading{{ forloop.counter }}" data-bs-parent="#departmentInventoryAccordion">
                         <div class="accordion-body p-0">
                             <div class="table-responsive">
-                                <table class="table table-hover mb-0 inventory-device-table">
+                                <table class="table table-hover table-sm align-middle mb-0 inventory-device-table">
                                     <thead class="table-light">
                                         <tr>
                                             <th>Tag</th>
@@ -113,11 +113,11 @@
                                             data-repair-approved-by="{{ item.latest_repair.approved_by.username|default:'N/A' }}"
                                             data-repair-issue="{{ item.latest_repair.issue_description|default:'No issue reported' }}"
                                             data-comment="{{ item.comment|default:'' }}">
-                                            <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
+                                            <td><span>{{ item.device.company_tag }}</span></td>
                                             <td>{{ item.device.serial_number }}</td>
                                             <td>{{ item.device.brand }} {{ item.device.model }}</td>
                                             <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
-                                            <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
+                                            <td><span>{{ item.status }}</span></td>
                                             <td>{{ item.comment|default:"-" }}</td>
                                             <td class="text-end">
                                                 <div class="dropdown action-menu">

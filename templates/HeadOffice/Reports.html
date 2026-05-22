@@ -82,7 +82,7 @@
             <div class="card h-100">
                 <div class="card-header"><h5 class="card-title mb-0">Technician Performance</h5></div>
                 <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
+                    <table class="table table-hover table-sm align-middle mb-0">
                         <thead class="table-light"><tr><th>Technician</th><th class="text-end">Completed Repairs</th></tr></thead>
                         <tbody>
                         {% for row in technician_performance %}
@@ -99,7 +99,7 @@
             <div class="card h-100">
                 <div class="card-header"><h5 class="card-title mb-0">Branch Statistics</h5></div>
                 <div class="card-body p-0">
-                    <table class="table table-hover mb-0">
+                    <table class="table table-hover table-sm align-middle mb-0">
                         <thead class="table-light"><tr><th>Branch</th><th class="text-end">Devices</th><th class="text-end">Repair Records</th></tr></thead>
                         <tbody>
                         {% for row in branch_stats %}
@@ -124,9 +124,9 @@
     <div class="tab-content">
         <div class="tab-pane fade show active" id="employeeReport">
             <div class="card"><div class="card-body p-0"><div class="table-responsive">
-                <table class="table table-hover mb-0"><thead class="table-light"><tr><th>Name</th><th>Status</th><th>Branch</th><th>Department</th><th>Assignments</th></tr></thead><tbody>
+                <table class="table table-hover table-sm align-middle mb-0"><thead class="table-light"><tr><th>Name</th><th>Status</th><th>Branch</th><th>Department</th><th>Assignments</th></tr></thead><tbody>
                 {% for employee in employee_rows %}
-                    <tr><td>{{ employee.full_name }}</td><td><span class="badge bg-light text-dark">{{ employee.status }}</span></td><td>{{ employee.branch.name|default:"-" }}</td><td>{{ employee.department.name|default:"-" }}</td><td>{{ employee.device_set.count }}</td></tr>
+                    <tr><td>{{ employee.full_name }}</td><td><span>{{ employee.status }}</span></td><td>{{ employee.branch.name|default:"-" }}</td><td>{{ employee.department.name|default:"-" }}</td><td>{{ employee.device_set.count }}</td></tr>
                 {% empty %}
                     <tr><td colspan="5" class="text-center text-muted py-3">No employees found</td></tr>
                 {% endfor %}
@@ -135,9 +135,9 @@
         </div>
         <div class="tab-pane fade" id="repairReport">
             <div class="card"><div class="card-body p-0"><div class="table-responsive">
-                <table class="table table-hover mb-0"><thead class="table-light"><tr><th>Device</th><th>Employee</th><th>Status</th><th>Technician</th><th>Date</th></tr></thead><tbody>
+                <table class="table table-hover table-sm align-middle mb-0"><thead class="table-light"><tr><th>Device</th><th>Employee</th><th>Status</th><th>Technician</th><th>Date</th></tr></thead><tbody>
                 {% for repair in repair_rows %}
-                    <tr><td>{{ repair.device.company_tag }}</td><td>{{ repair.employee.full_name }}</td><td><span class="badge bg-light text-dark">{{ repair.status }}</span></td><td>{{ repair.repairlog.technician.username|default:"-" }}</td><td>{{ repair.request_date|date:"M d, Y" }}</td></tr>
+                    <tr><td>{{ repair.device.company_tag }}</td><td>{{ repair.employee.full_name }}</td><td><span>{{ repair.status }}</span></td><td>{{ repair.repairlog.technician.username|default:"-" }}</td><td>{{ repair.request_date|date:"M d, Y" }}</td></tr>
                 {% empty %}
                     <tr><td colspan="5" class="text-center text-muted py-3">No repairs found</td></tr>
                 {% endfor %}
@@ -146,9 +146,9 @@
         </div>
         <div class="tab-pane fade" id="inventoryReport">
             <div class="card"><div class="card-body p-0"><div class="table-responsive">
-                <table class="table table-hover mb-0"><thead class="table-light"><tr><th>Device</th><th>Asset Code</th><th>Status</th><th>Employee</th><th>Branch</th></tr></thead><tbody>
+                <table class="table table-hover table-sm align-middle mb-0"><thead class="table-light"><tr><th>Device</th><th>Asset Code</th><th>Status</th><th>Employee</th><th>Branch</th></tr></thead><tbody>
                 {% for device in inventory_rows %}
-                    <tr><td>{{ device.device_type }} - {{ device.brand }} {{ device.model }}</td><td>{{ device.company_tag }}</td><td><span class="badge bg-light text-dark">{{ device.status }}</span></td><td>{{ device.assigned_employee.full_name|default:"-" }}</td><td>{{ device.assigned_branch.name|default:"Head Office" }}</td></tr>
+                    <tr><td>{{ device.device_type }} - {{ device.brand }} {{ device.model }}</td><td>{{ device.company_tag }}</td><td><span>{{ device.status }}</span></td><td>{{ device.assigned_employee.full_name|default:"-" }}</td><td>{{ device.assigned_branch.name|default:"Head Office" }}</td></tr>
                 {% empty %}
                     <tr><td colspan="5" class="text-center text-muted py-3">No inventory found</td></tr>
                 {% endfor %}
@@ -157,7 +157,7 @@
         </div>
         <div class="tab-pane fade" id="activityReport">
             <div class="card"><div class="card-body p-0"><div class="table-responsive">
-                <table class="table table-hover mb-0"><thead class="table-light"><tr><th>User</th><th>Action</th><th>Object</th><th>Details</th><th>Time</th></tr></thead><tbody>
+                <table class="table table-hover table-sm align-middle mb-0"><thead class="table-light"><tr><th>User</th><th>Action</th><th>Object</th><th>Details</th><th>Time</th></tr></thead><tbody>
                 {% for audit in audit_rows %}
                     <tr><td>{{ audit.user.username|default:"System" }}</td><td>{{ audit.action }}</td><td>{{ audit.model_name }} #{{ audit.object_id|default:"-" }}</td><td>{{ audit.details|truncatechars:80 }}</td><td>{{ audit.timestamp|date:"M d, Y H:i" }}</td></tr>
                 {% empty %}

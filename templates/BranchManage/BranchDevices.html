@@ -14,7 +14,7 @@
         <div class="card-header"><h5 class="card-title mb-0">Devices ({{ devices.count }})</h5></div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover table-sm align-middle mb-0">
                     <thead class="table-light">
                         <tr><th>Type</th><th>Brand</th><th>Model</th><th>Serial</th><th>Company Tag</th><th>Assigned Employee</th><th>Status</th><th>Location</th></tr>
                     </thead>
@@ -25,9 +25,9 @@
                             <td>{{ device.brand }}</td>
                             <td>{{ device.model }}</td>
                             <td>{{ device.serial_number }}</td>
-                            <td><span class="badge bg-info">{{ device.company_tag }}</span></td>
+                            <td><span>{{ device.company_tag }}</span></td>
                             <td>{{ device.assigned_employee.full_name|default:"-" }}</td>
-                            <td><span class="badge bg-light text-dark">{{ device.status }}</span></td>
+                            <td><span>{{ device.status }}</span></td>
                             <td>{{ device.current_location }}</td>
                         </tr>
                         {% empty %}

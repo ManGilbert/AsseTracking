@@ -19,17 +19,17 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0" id="inProgressTable">
+                <table class="table table-hover table-sm align-middle mb-0" id="inProgressTable">
                     <thead class="table-light">
                         <tr><th>Device</th><th>Employee</th><th>Issue</th><th>Device Status</th><th>Current Location</th><th>Started</th><th class="text-end">Action</th></tr>
                     </thead>
                     <tbody>
                         {% for repair in repairs %}
                         <tr>
-                            <td><span class="badge bg-info">{{ repair.device.company_tag }}</span><div class="small text-muted">{{ repair.device.serial_number }}</div></td>
+                            <td><span>{{ repair.device.company_tag }}</span><div class="small text-muted">{{ repair.device.serial_number }}</div></td>
                             <td>{{ repair.employee.full_name }}</td>
                             <td>{{ repair.issue_description|truncatechars:90 }}</td>
-                            <td><span class="badge bg-warning text-dark">{{ repair.device.status }}</span></td>
+                            <td><span>{{ repair.device.status }}</span></td>
                             <td>{{ repair.device.current_location }}</td>
                             <td>{{ repair.request_date|date:"M d, Y" }}</td>
                             <td class="text-end">

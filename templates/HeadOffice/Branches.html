@@ -40,7 +40,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0" id="branchesTable">
+                        <table class="table table-hover table-sm align-middle mb-0" id="branchesTable">
                             <thead class="table-light">
                                 <tr>
                                     <th scope="col">Branch Name</th>
@@ -60,16 +60,16 @@
                                     <td>{{ branch.location }}</td>
                                     <td>
                                         {% if branch.manager %}
-                                        <span class="badge bg-info">{{ branch.manager.full_name }}</span>
+                                        <span>{{ branch.manager.full_name }}</span>
                                         {% else %}
-                                        <span class="badge bg-secondary">Unassigned</span>
+                                        <span>Unassigned</span>
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <span class="badge bg-light text-dark">{{ branch.departments.count }}</span>
+                                        <span>{{ branch.departments.count }}</span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-light text-dark">{{ branch.employees.count }}</span>
+                                        <span>{{ branch.employees.count }}</span>
                                     </td>
                                     <td class="text-end">
                                         <div class="dropdown action-menu">
@@ -81,7 +81,7 @@
                                                     <i class="feather-edit"></i>Edit branch
                                                 </button>
                                                 <button class="dropdown-item" type="button" onclick="expandBranchDetails({{ branch.id }})">
-                                                    <i class="feather-chevron-down"></i>Toggle details
+                                                    <i class="feather-chevron-down"></i>More details
                                                 </button>
                                                 {% if show_deleted %}
                                                 <button class="dropdown-item text-success" type="button" onclick="restoreBranch({{ branch.id }})">
@@ -99,8 +99,8 @@
                                 <tr id="branch-details-{{ branch.id }}" data-search-detail-for="{{ branch.id }}" style="display:none;">
                                     <td colspan="6">
                                         <div class="p-3">
-                                            <div class="row">
-                                                <div class="col-md-6">
+                                            <div class="row g-3">
+                                                <div class="col-lg-4">
                                                     <h6 class="mb-3">Departments</h6>
                                                     <div class="list-group list-group-sm">
                                                         {% for dept in branch.departments.all %}
@@ -112,30 +112,36 @@
                                                         {% endfor %}
                                                     </div>
                                                 </div>
-                                                <div class="col-md-6">
+                                                <div class="col-lg-8">
                                                     <h6 class="mb-3">Employees</h6>
-                                                    <div class="list-group list-group-sm">
-                                                        {% for emp in branch.employees.all|slice:":5" %}
-                                                        <div class="list-group-item">
-                                                            <div class="small">
-                                                                <strong>{{ emp.full_name }}</strong>
-                                                                <div class="text-muted">{{ emp.position }}</div>
-                                                                {% for device in emp.device_set.all %}
-                                                                <div class="text-muted">
-                                                                    {{ device.brand }} {{ device.model }} |
-                                                                    Tag: {{ device.company_tag }} |
-                                                                    Serial: {{ device.serial_number }} |
-                                                                    Dept: {{ emp.department.name|default:"-" }}
+                                                    <div class="row row-cols-1 row-cols-xl-2 g-2">
+                                                        {% for emp in branch.employees.all %}
+                                                        <div class="col">
+                                                            <div class="border rounded p-2 h-100">
+                                                                <div class="d-flex justify-content-between gap-2">
+                                                                    <div class="small">
+                                                                        <strong>{{ emp.full_name }}</strong>
+                                                                        <div class="text-muted">{{ emp.position|default:"No position" }}</div>
+                                                                    </div>
+                                                                    <span class="small text-muted text-nowrap">{{ emp.department.name|default:"No dept" }}</span>
                                                                 </div>
-                                                                {% endfor %}
+                                                                <div class="mt-2">
+                                                                    {% for device in emp.device_set.all %}
+                                                                    <div class="small border-top py-1">
+                                                                        <div><strong>{{ device.company_tag }}</strong> {{ device.brand }} {{ device.model }}</div>
+                                                                        <div class="text-muted">Serial: {{ device.serial_number }} | Status: {{ device.get_status_display }}</div>
+                                                                    </div>
+                                                                    {% empty %}
+                                                                    <div class="small text-muted border-top pt-1">No assigned devices</div>
+                                                                    {% endfor %}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                        {% endfor %}
-                                                        {% if branch.employees.count > 5 %}
-                                                        <div class="list-group-item text-muted small">
-                                                            ... and {{ branch.employees.count|add:"-5" }} more
+                                                        {% empty %}
+                                                        <div class="col">
+                                                            <p class="text-muted small mb-0">No employees</p>
                                                         </div>
-                                                        {% endif %}
+                                                        {% endfor %}
                                                     </div>
                                                 </div>
                                             </div>

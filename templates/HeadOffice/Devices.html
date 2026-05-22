@@ -91,7 +91,7 @@
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0" id="devicesTable">
+                        <table class="table table-hover table-sm align-middle mb-0" id="devicesTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Tag</th>
@@ -108,26 +108,20 @@
                                 {% for device in devices %}
                                 <tr>
                                     <td>
-                                        <strong class="badge bg-info">{{ device.company_tag }}</strong>
+                                        <strong>{{ device.company_tag }}</strong>
                                     </td>
                                     <td>{{ device.device_type }}</td>
                                     <td>
                                         <small>{{ device.serial_number }}</small>
                                     </td>
                                     <td>
-                                        <span class="badge 
-                                            {% if device.status == 'AVAILABLE' %}bg-success
-                                            {% elif device.status == 'ASSIGNED' %}bg-info
-                                            {% elif device.status == 'IN_REPAIR' %}bg-warning
-                                            {% elif device.status == 'MISSING' %}bg-danger
-                                            {% elif device.status == 'RETIRED' %}bg-secondary
-                                            {% else %}bg-light text-dark{% endif %}">
+                                        <span>
                                             {{ device.status }}
                                         </span>
                                     </td>
                                     <td>
                                         {% if device.assigned_employee %}
-                                        <span class="badge bg-soft-primary text-primary">
+                                        <span>
                                             {{ device.assigned_employee.full_name|truncatechars:20 }}
                                         </span>
                                         {% else %}

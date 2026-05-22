@@ -32,7 +32,7 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0">
+                <table class="table table-hover table-sm align-middle mb-0">
                     <thead class="table-light">
                         <tr><th>Check</th><th>Device</th><th>Tag</th><th>Assigned Employee</th><th>Status</th><th>Comment</th></tr>
                     </thead>
@@ -41,9 +41,9 @@
                         <tr>
                             <td><input type="checkbox" class="form-check-input" {% if item.status == 'VERIFIED' %}checked{% endif %} disabled></td>
                             <td>{{ item.device.device_type }} - {{ item.device.brand }} {{ item.device.model }}</td>
-                            <td><span class="badge bg-info">{{ item.device.company_tag }}</span></td>
+                            <td><span>{{ item.device.company_tag }}</span></td>
                             <td>{{ item.device.assigned_employee.full_name|default:"-" }}</td>
-                            <td><span class="badge bg-light text-dark">{{ item.status }}</span></td>
+                            <td><span>{{ item.status }}</span></td>
                             <td>{{ item.comment|default:"-" }}</td>
                         </tr>
                     {% empty %}

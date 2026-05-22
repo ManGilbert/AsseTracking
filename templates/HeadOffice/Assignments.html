@@ -75,7 +75,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0" id="activeAssignmentsTable">
+                        <table class="table table-hover table-sm align-middle mb-0" id="activeAssignmentsTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Device Tag</th>
@@ -91,7 +91,7 @@
                                 {% for assignment in active_assignments %}
                                 <tr>
                                     <td>
-                                        <strong class="badge bg-info">{{ assignment.device.company_tag }}</strong>
+                                        <strong>{{ assignment.device.company_tag }}</strong>
                                     </td>
                                     <td>{{ assignment.employee.full_name }}</td>
                                     <td>{{ assignment.branch.name }}</td>
@@ -135,7 +135,7 @@
             <div class="card">
                 <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover mb-0" id="returnedAssignmentsTable">
+                        <table class="table table-hover table-sm align-middle mb-0" id="returnedAssignmentsTable">
                             <thead class="table-light">
                                 <tr>
                                     <th>Device Tag</th>
@@ -151,7 +151,7 @@
                                 {% for assignment in returned_assignments %}
                                 <tr>
                                     <td>
-                                        <strong class="badge bg-secondary">{{ assignment.device.company_tag }}</strong>
+                                        <strong>{{ assignment.device.company_tag }}</strong>
                                     </td>
                                     <td>{{ assignment.employee.full_name }}</td>
                                     <td>{{ assignment.assigned_date|date:"M d, Y" }}</td>

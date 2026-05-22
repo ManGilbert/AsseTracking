@@ -25,17 +25,17 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0" id="repairRequestsTable">
+                <table class="table table-hover table-sm align-middle mb-0" id="repairRequestsTable">
                     <thead class="table-light">
                         <tr><th>Device</th><th>Issue</th><th>Priority</th><th>Status</th><th>Requested</th><th>Approved By</th><th class="text-end">Details</th></tr>
                     </thead>
                     <tbody>
                         {% for repair in repairs %}
                         <tr>
-                            <td><span class="badge bg-info">{{ repair.device.company_tag }}</span><div class="small text-muted">{{ repair.device.brand }} {{ repair.device.model }}</div></td>
+                            <td><span>{{ repair.device.company_tag }}</span><div class="small text-muted">{{ repair.device.brand }} {{ repair.device.model }}</div></td>
                             <td>{{ repair.issue_description|truncatechars:100 }}</td>
                             <td>{{ repair.priority }}</td>
-                            <td><span class="badge bg-light text-dark">{{ repair.status }}</span></td>
+                            <td><span>{{ repair.status }}</span></td>
                             <td>{{ repair.request_date|date:"M d, Y H:i" }}</td>
                             <td>{{ repair.approved_by.username|default:"-" }}</td>
                             <td class="text-end">
