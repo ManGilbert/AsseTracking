@@ -15,12 +15,40 @@
     <link rel="stylesheet" type="text/css" href="{% static 'assets/vendors/css/daterangepicker.min.css' %}" />
     <link rel="stylesheet" type="text/css" href="{% static 'assets/css/theme.min.css' %}" />
     <style>
+        /* Compact table defaults for better density and readability */
+        table.table {
+            font-size: 0.92rem; /* slightly smaller but still readable */
+            line-height: 1.25;
+        }
+        table.table th,
+        table.table td {
+            padding: 0.35rem 0.55rem;
+            vertical-align: middle;
+        }
+        table.table thead th {
+            padding-top: 0.4rem;
+            padding-bottom: 0.4rem;
+        }
+        table.table tbody tr td {
+            padding-top: 0.35rem;
+            padding-bottom: 0.35rem;
+        }
+        table.table tbody tr td.text-center.py-4 {
+            padding-top: 0.6rem;
+            padding-bottom: 0.6rem;
+        }
+        table.table tbody tr {
+            border-top-width: 1px;
+        }
+
+        /* Keep the action menu compact and aligned */
         .action-menu-btn {
-            width: 34px;
-            height: 34px;
+            width: 30px;
+            height: 30px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            padding: 0;
         }
         .action-menu .dropdown-item {
             display: flex;
@@ -31,6 +59,21 @@
         .action-menu .dropdown-item i {
             width: 16px;
             text-align: center;
+        }
+
+        /* Make table compact on smaller screens without losing readability */
+        @media (max-width: 768px) {
+            table.table th,
+            table.table td {
+                padding: 0.3rem 0.5rem;
+            }
+            table.table {
+                font-size: 0.9rem;
+            }
+            .action-menu-btn {
+                width: 28px;
+                height: 28px;
+            }
         }
     </style>
     {% block extra_css %}{% endblock %}
