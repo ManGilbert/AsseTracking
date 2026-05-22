@@ -20,6 +20,7 @@ from .models import (
     InventoryItem,
     Notification,
     AuditLog,
+    DeviceLocationHistory,
 )
 
 DEFAULT_EMPLOYEE_PASSWORD = "Aa@2026123"
@@ -165,8 +166,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"branch": "Branch is required."})
 
         department = attrs.get("department") or getattr(self.instance, "department", None)
-        if not department:
-            raise serializers.ValidationError({"department": "Department is required."})
+        if not department and branch:
+            department = Department.objects.filter(branch=branch, is_deleted=False).order_by("id").first()
+            if not department:
+                department = Department.objects.create(branch=branch, name="General")
+            attrs["department"] = department
 
         if department and branch and department.branch_id != branch.id:
             raise serializers.ValidationError(
@@ -256,6 +260,9 @@ class DeviceSerializer(serializers.ModelSerializer):
         source="assigned_branch.name", read_only=True
     )
     days_assigned = serializers.SerializerMethodField()
+    decommissioned_by_username = serializers.CharField(
+        source="decommissioned_by.username", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Device
@@ -278,8 +285,30 @@ class DeviceSerializer(serializers.ModelSerializer):
             "current_location",
             "condition_notes",
             "days_assigned",
+            "is_deleted",
+            "deleted_at",
+            "deletion_reason",
+            "decommissioned_at",
+            "decommissioned_by",
+            "decommissioned_by_username",
+            "decommission_reason",
+            "decommission_notes",
+            "previous_status_before_decommission",
+            "last_location_before_decommission",
         )
-        read_only_fields = ("id", "registered_at", "days_assigned")
+        read_only_fields = (
+            "id",
+            "registered_at",
+            "days_assigned",
+            "is_deleted",
+            "deleted_at",
+            "decommissioned_at",
+            "decommissioned_by",
+            "decommissioned_by_username",
+            "decommission_reason",
+            "previous_status_before_decommission",
+            "last_location_before_decommission",
+        )
 
     def get_days_assigned(self, obj):
         """Calculate days since assignment."""
@@ -340,8 +369,32 @@ class DeviceListSerializer(serializers.ModelSerializer):
             "assigned_branch",
             "assigned_branch_name",
             "location_type",
+            "current_location",
+            "is_deleted",
+            "decommissioned_at",
+            "decommission_reason",
         )
         read_only_fields = ("id", "registered_at")
+
+
+class DeviceLocationHistorySerializer(serializers.ModelSerializer):
+    updated_by_username = serializers.CharField(source="updated_by.username", read_only=True, allow_null=True)
+
+    class Meta:
+        model = DeviceLocationHistory
+        fields = (
+            "id",
+            "device",
+            "location_type",
+            "location",
+            "action",
+            "status",
+            "updated_by",
+            "updated_by_username",
+            "timestamp",
+            "notes",
+        )
+        read_only_fields = fields
 
 
 # =========================

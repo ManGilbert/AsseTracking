@@ -64,10 +64,40 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.username
 
 
+class SoftDeleteModel(models.Model):
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="%(class)s_deleted_records",
+    )
+    deletion_reason = models.TextField(blank=True)
+
+    class Meta:
+        abstract = True
+
+    def soft_delete(self, user=None, reason=""):
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.deleted_by = user
+        self.deletion_reason = reason or ""
+        self.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deletion_reason"])
+
+    def restore(self, user=None):
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.deletion_reason = ""
+        self.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deletion_reason"])
+
+
 # =========================
 # BRANCH
 # =========================
-class Branch(models.Model):
+class Branch(SoftDeleteModel):
     name = models.CharField(max_length=255)
     location = models.CharField(max_length=255)
 
@@ -86,7 +116,7 @@ class Branch(models.Model):
 # =========================
 # DEPARTMENT
 # =========================
-class Department(models.Model):
+class Department(SoftDeleteModel):
     name = models.CharField(max_length=255)
 
     branch = models.ForeignKey(
@@ -102,7 +132,7 @@ class Department(models.Model):
 # =========================
 # EMPLOYEE
 # =========================
-class Employee(models.Model):
+class Employee(SoftDeleteModel):
     STATUS_CHOICES = [
         ('ACTIVE', 'Active'),
         ('INACTIVE', 'Inactive'),
@@ -130,7 +160,7 @@ class Employee(models.Model):
 # =========================
 # DEVICE
 # =========================
-class Device(models.Model):
+class Device(SoftDeleteModel):
     STATUS_CHOICES = [
         ('AVAILABLE', 'Available'),
         ('ASSIGNED', 'Assigned'),
@@ -140,12 +170,14 @@ class Device(models.Model):
         ('REPAIRED', 'Repaired'),
         ('MISSING', 'Missing'),
         ('RETIRED', 'Retired'),
+        ('DECOMMISSIONED', 'Decommissioned'),
     ]
 
     LOCATION_CHOICES = [
         ('HEAD_OFFICE', 'Head Office'),
         ('BRANCH', 'Branch'),
         ('EMPLOYEE', 'Employee'),
+        ('TECHNICIAN', 'Head Office / Technician'),
     ]
 
     device_type = models.CharField(max_length=50)
@@ -168,6 +200,18 @@ class Device(models.Model):
 
     condition_notes = models.TextField(blank=True)
     registered_at = models.DateTimeField(auto_now_add=True)
+    decommissioned_at = models.DateTimeField(null=True, blank=True)
+    decommissioned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="decommissioned_devices",
+    )
+    decommission_reason = models.CharField(max_length=255, blank=True)
+    decommission_notes = models.TextField(blank=True)
+    previous_status_before_decommission = models.CharField(max_length=20, blank=True)
+    last_location_before_decommission = models.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return f"{self.device_type} - {self.company_tag}"
@@ -267,6 +311,17 @@ class RepairLog(models.Model):
 # INVENTORY SESSION
 # =========================
 class InventorySession(models.Model):
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="inventorysession_deleted_records",
+    )
+    deletion_reason = models.TextField(blank=True)
+
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE)
 
     start_date = models.DateTimeField()
@@ -291,6 +346,20 @@ class InventorySession(models.Model):
 
     def __str__(self):
         return f"{self.branch} Inventory"
+
+    def soft_delete(self, user=None, reason=""):
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.deleted_by = user
+        self.deletion_reason = reason or ""
+        self.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deletion_reason"])
+
+    def restore(self, user=None):
+        self.is_deleted = False
+        self.deleted_at = None
+        self.deleted_by = None
+        self.deletion_reason = ""
+        self.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "deletion_reason"])
 
 
 # =========================
@@ -348,3 +417,20 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} - {self.timestamp}"
+
+
+class DeviceLocationHistory(models.Model):
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name="location_history")
+    location_type = models.CharField(max_length=20, choices=Device.LOCATION_CHOICES)
+    location = models.CharField(max_length=255)
+    action = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, blank=True)
+    updated_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+
+    def __str__(self):
+        return f"{self.device.company_tag} - {self.location} ({self.action})"

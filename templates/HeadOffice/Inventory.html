@@ -13,9 +13,14 @@
                     <h1 class="h3 mb-0"><i class="feather-inbox me-2"></i>Inventory Management</h1>
                     <p class="text-muted mb-0">Create and manage inventory sessions</p>
                 </div>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSessionModal">
-                    <i class="feather-plus me-1"></i>New Session
-                </button>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary" href="?deleted={% if show_deleted %}0{% else %}1{% endif %}">
+                        <i class="feather-archive me-1"></i>{% if show_deleted %}Active Records{% else %}Deleted Records{% endif %}
+                    </a>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+                        <i class="feather-plus me-1"></i>New Session
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -87,6 +92,15 @@
                                                 {% if not session.end_date %}
                                                 <button class="dropdown-item" type="button" onclick="closeInventorySession({{ session.id }})">
                                                     <i class="feather-lock"></i>Close session
+                                                </button>
+                                                {% endif %}
+                                                {% if show_deleted %}
+                                                <button class="dropdown-item text-success" type="button" onclick="restoreInventorySession({{ session.id }})">
+                                                    <i class="feather-rotate-ccw"></i>Restore session
+                                                </button>
+                                                {% else %}
+                                                <button class="dropdown-item text-danger" type="button" onclick="deleteInventorySession({{ session.id }})">
+                                                    <i class="feather-trash-2"></i>Delete session
                                                 </button>
                                                 {% endif %}
                                             </div>
@@ -206,6 +220,32 @@ document.getElementById('createSessionForm').addEventListener('submit', function
         }
     });
 });
+
+async function deleteInventorySession(sessionId) {
+    if (!(await showAppConfirm('Delete this inventory session? Records with activity will be blocked.', 'Delete Inventory'))) return;
+    fetch(`/api/inventory-sessions/${sessionId}/`, {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Inventory session deleted successfully.', 'Error deleting inventory session'));
+}
+
+function restoreInventorySession(sessionId) {
+    fetch(`/api/inventory-sessions/${sessionId}/restore/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Inventory session restored successfully.', 'Error restoring inventory session'));
+}
+
+function handleDeleteRestoreResponse(response, successMessage, fallback) {
+    if (response.ok) {
+        showAppMessage(successMessage, 'Success', 'success').then(() => location.reload());
+    } else {
+        response.json().then(e => {
+            const details = e.related_activities ? '\n\n' + e.related_activities.map(item => `${item.type}: ${item.count}`).join('\n') : '';
+            showAppMessage(getApiError(e, fallback) + details, 'Blocked', 'warning');
+        });
+    }
+}
 
 async function showAppConfirm(message, title = 'Confirm') {
     if (window.showAppConfirm) {

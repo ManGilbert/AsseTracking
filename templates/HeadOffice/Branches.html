@@ -13,9 +13,14 @@
                     <h1 class="h3 mb-0"><i class="feather-map me-2"></i>Branch Management</h1>
                     <p class="text-muted mb-0">Manage branches across all locations</p>
                 </div>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createBranchModal">
-                    <i class="feather-plus me-1"></i>New Branch
-                </button>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary" href="?deleted={% if show_deleted %}0{% else %}1{% endif %}">
+                        <i class="feather-archive me-1"></i>{% if show_deleted %}Active Records{% else %}Deleted Records{% endif %}
+                    </a>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createBranchModal">
+                        <i class="feather-plus me-1"></i>New Branch
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -78,6 +83,15 @@
                                                 <button class="dropdown-item" type="button" onclick="expandBranchDetails({{ branch.id }})">
                                                     <i class="feather-chevron-down"></i>Toggle details
                                                 </button>
+                                                {% if show_deleted %}
+                                                <button class="dropdown-item text-success" type="button" onclick="restoreBranch({{ branch.id }})">
+                                                    <i class="feather-rotate-ccw"></i>Restore branch
+                                                </button>
+                                                {% else %}
+                                                <button class="dropdown-item text-danger" type="button" onclick="deleteBranch({{ branch.id }})">
+                                                    <i class="feather-trash-2"></i>Delete branch
+                                                </button>
+                                                {% endif %}
                                             </div>
                                         </div>
                                     </td>
@@ -258,6 +272,32 @@ document.getElementById('editBranchForm').addEventListener('submit', function(e)
         else response.json().then(e => showAppMessage(getApiError(e, 'Error updating branch'), 'Error', 'error'));
     });
 });
+
+async function deleteBranch(branchId) {
+    if (!(await showAppConfirm('Delete this branch? Records with activity will be blocked.', 'Delete Branch'))) return;
+    fetch(`/api/branches/${branchId}/`, {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Branch deleted successfully.', 'Error deleting branch'));
+}
+
+function restoreBranch(branchId) {
+    fetch(`/api/branches/${branchId}/restore/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Branch restored successfully.', 'Error restoring branch'));
+}
+
+function handleDeleteRestoreResponse(response, successMessage, fallback) {
+    if (response.ok) {
+        showAppMessage(successMessage, 'Success', 'success').then(() => location.reload());
+    } else {
+        response.json().then(e => {
+            const details = e.related_activities ? '\n\n' + e.related_activities.map(item => `${item.type}: ${item.count}`).join('\n') : '';
+            showAppMessage(getApiError(e, fallback) + details, 'Blocked', 'warning');
+        });
+    }
+}
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;

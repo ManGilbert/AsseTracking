@@ -22,7 +22,7 @@
                 <table class="table table-hover mb-0" id="repairQueueTable">
                     <thead class="table-light">
                         <tr>
-                            <th>Device</th><th>Employee</th><th>Branch</th><th>Issue</th><th>Priority</th><th>Requested</th><th class="text-end">Action</th>
+                            <th>Device</th><th>Employee</th><th>Branch</th><th>Current Location</th><th>Issue</th><th>Priority</th><th>Requested</th><th class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -31,6 +31,7 @@
                             <td><span class="badge bg-info">{{ repair.device.company_tag }}</span><div class="small text-muted">{{ repair.device.brand }} {{ repair.device.model }}</div></td>
                             <td>{{ repair.employee.full_name }}</td>
                             <td>{{ repair.device.assigned_branch.name|default:"-" }}</td>
+                            <td>{{ repair.device.current_location }}</td>
                             <td>{{ repair.issue_description|truncatechars:80 }}</td>
                             <td><span class="badge bg-warning text-dark">{{ repair.priority }}</span></td>
                             <td>{{ repair.request_date|date:"M d, Y H:i" }}</td>
@@ -48,7 +49,7 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="7" class="text-center text-muted py-4">No approved repairs</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-4">No approved repairs</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

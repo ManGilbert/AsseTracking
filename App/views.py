@@ -35,6 +35,7 @@ from .models import (
     InventoryItem,
     Notification,
     AuditLog,
+    DeviceLocationHistory,
 )
 
 from .serializers import (
@@ -55,6 +56,7 @@ from .serializers import (
     InventoryItemSerializer,
     NotificationSerializer,
     AuditLogSerializer,
+    DeviceLocationHistorySerializer,
     DEFAULT_EMPLOYEE_PASSWORD,
 )
 
@@ -80,6 +82,7 @@ from .services import (
     InventoryService,
     EmployeeExitService,
     AuditService,
+    DeviceLifecycleService,
 )
 
 
@@ -114,6 +117,84 @@ def _sync_employee_user_active_state(employee):
     if employee.user.is_active != should_be_active:
         employee.user.is_active = should_be_active
         employee.user.save(update_fields=["is_active"])
+
+
+def _include_deleted(request):
+    return request.query_params.get("deleted") == "1" or request.GET.get("deleted") == "1"
+
+
+def _deleted_only(request):
+    return request.query_params.get("deleted") == "only" or request.GET.get("deleted") == "only"
+
+
+def _activity_response(record_type, activities):
+    return Response(
+        {
+            "error": "This record cannot be deleted because it has related activities.",
+            "related_activities": activities,
+            "record_type": record_type,
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+def _soft_delete_instance(instance, user, model_name, details, reason=""):
+    instance.soft_delete(user=user, reason=reason)
+    AuditService.log_action(user, f"{model_name.upper()}_DELETED", model_name, instance.id, details)
+
+
+def _restore_instance(instance, user, model_name, details):
+    instance.restore(user=user)
+    AuditService.log_action(user, f"{model_name.upper()}_RESTORED", model_name, instance.id, details)
+
+
+def _branch_delete_activities(branch):
+    activities = []
+    if branch.employees.filter(is_deleted=False).exists():
+        activities.append({"type": "Employees", "count": branch.employees.filter(is_deleted=False).count()})
+    if Device.objects.filter(assigned_branch=branch, is_deleted=False).exists():
+        activities.append({"type": "Assigned devices", "count": Device.objects.filter(assigned_branch=branch, is_deleted=False).count()})
+    if InventorySession.objects.filter(branch=branch, is_deleted=False).exists():
+        activities.append({"type": "Inventory sessions", "count": InventorySession.objects.filter(branch=branch, is_deleted=False).count()})
+    return activities
+
+
+def _department_delete_activities(department):
+    activities = []
+    if Employee.objects.filter(department=department, is_deleted=False).exists():
+        activities.append({"type": "Employees", "count": Employee.objects.filter(department=department, is_deleted=False).count()})
+    return activities
+
+
+def _employee_delete_activities(employee):
+    activities = []
+    if Device.objects.filter(assigned_employee=employee, is_deleted=False).exists():
+        activities.append({"type": "Assigned devices", "count": Device.objects.filter(assigned_employee=employee, is_deleted=False).count()})
+    if DeviceAssignment.objects.filter(employee=employee).exists():
+        activities.append({"type": "Assignment history", "count": DeviceAssignment.objects.filter(employee=employee).count()})
+    if RepairRequest.objects.filter(employee=employee).exists():
+        activities.append({"type": "Repair history", "count": RepairRequest.objects.filter(employee=employee).count()})
+    if Branch.objects.filter(manager=employee, is_deleted=False).exists():
+        activities.append({"type": "Managed branches", "count": Branch.objects.filter(manager=employee, is_deleted=False).count()})
+    return activities
+
+
+def _device_delete_activities(device):
+    activities = []
+    if device.assignments.exists():
+        activities.append({"type": "Assignment history", "count": device.assignments.count()})
+    if RepairRequest.objects.filter(device=device).exists():
+        activities.append({"type": "Repair history", "count": RepairRequest.objects.filter(device=device).count()})
+    if InventoryItem.objects.filter(device=device).exists():
+        activities.append({"type": "Inventory records", "count": InventoryItem.objects.filter(device=device).count()})
+    return activities
+
+
+def _inventory_delete_activities(session):
+    activities = []
+    if session.items.exists():
+        activities.append({"type": "Inventory transactions", "count": session.items.count()})
+    return activities
 
 
 # =========================
@@ -176,6 +257,14 @@ class BranchViewSet(viewsets.ModelViewSet):
     ordering_fields = ["name"]
     ordering = ["name"]
 
+    def get_queryset(self):
+        queryset = Branch.objects.all()
+        if _deleted_only(self.request):
+            return queryset.filter(is_deleted=True)
+        if not _include_deleted(self.request):
+            queryset = queryset.filter(is_deleted=False)
+        return queryset
+
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
             return [IsHeadOffice()]
@@ -206,16 +295,50 @@ class BranchViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
+        activities = _branch_delete_activities(instance)
+        if activities:
+            raise DjangoValidationError("This record cannot be deleted because it has related activities.")
         branch_id = instance.id
         branch_name = instance.name
-        instance.delete()
-        AuditService.log_action(
+        _soft_delete_instance(
+            instance,
             self.request.user,
-            "BRANCH_DELETED",
+            "Branch",
+            f"Branch: {branch_name}",
+            self.request.data.get("reason", "") if hasattr(self.request, "data") else "",
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        activities = _branch_delete_activities(instance)
+        if activities:
+            return _activity_response("Branch", activities)
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
+    def restore(self, request, pk=None):
+        branch = get_object_or_404(Branch.objects.all(), pk=pk)
+        _restore_instance(branch, request.user, "Branch", f"Branch: {branch.name}")
+        return Response(self.get_serializer(branch).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["delete"], permission_classes=[IsHeadOffice])
+    def permanent_delete(self, request, pk=None):
+        branch = get_object_or_404(Branch.objects.all(), pk=pk)
+        activities = _branch_delete_activities(branch)
+        if activities:
+            return _activity_response("Branch", activities)
+        branch_id = branch.id
+        branch_name = branch.name
+        branch.delete()
+        AuditService.log_action(
+            request.user,
+            "BRANCH_PERMANENTLY_DELETED",
             "Branch",
             branch_id,
             f"Branch: {branch_name}",
         )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # =========================
@@ -241,6 +364,14 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     search_fields = ["name"]
     ordering = ["name"]
 
+    def get_queryset(self):
+        queryset = Department.objects.select_related("branch")
+        if _deleted_only(self.request):
+            return queryset.filter(is_deleted=True)
+        if not _include_deleted(self.request):
+            queryset = queryset.filter(is_deleted=False, branch__is_deleted=False)
+        return queryset
+
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
             return [IsHeadOffice()]
@@ -256,7 +387,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             )
         else:
             department = None
-        for branch in Branch.objects.all():
+        for branch in Branch.objects.filter(is_deleted=False):
             department, _ = Department.objects.get_or_create(branch=branch, name=name)
         AuditService.log_action(
             self.request.user,
@@ -301,10 +432,40 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         return Response(self.get_serializer(updated).data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
-        return Response(
-            {"error": "Departments cannot be deleted from the system interface."},
-            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        department = self.get_object()
+        old_name = department.name
+        departments = Department.objects.filter(name=old_name)
+        activities = []
+        for item in departments:
+            activities.extend(_department_delete_activities(item))
+        if activities:
+            return _activity_response("Department", activities)
+        departments.update(
+            is_deleted=True,
+            deleted_at=timezone.now(),
+            deleted_by_id=request.user.id,
+            deletion_reason=request.data.get("reason", ""),
         )
+        AuditService.log_action(
+            request.user,
+            "DEPARTMENT_DELETED",
+            "Department",
+            department.id,
+            f"Department: {old_name}",
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
+    def restore(self, request, pk=None):
+        department = get_object_or_404(Department.objects.all(), pk=pk)
+        Department.objects.filter(name=department.name).update(
+            is_deleted=False,
+            deleted_at=None,
+            deleted_by_id=None,
+            deletion_reason="",
+        )
+        AuditService.log_action(request.user, "DEPARTMENT_RESTORED", "Department", department.id, f"Department: {department.name}")
+        return Response(self.get_serializer(department).data, status=status.HTTP_200_OK)
 
 
 # =========================
@@ -331,6 +492,14 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     filterset_fields = ["branch", "status"]
     search_fields = ["full_name", "position"]
     ordering = ["full_name"]
+
+    def get_queryset(self):
+        queryset = Employee.objects.select_related("user", "branch", "department")
+        if _deleted_only(self.request):
+            return queryset.filter(is_deleted=True)
+        if not _include_deleted(self.request):
+            queryset = queryset.filter(is_deleted=False)
+        return queryset
 
     def get_serializer_class(self):
         if self.action == "list":
@@ -378,19 +547,53 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
-        employee_id = instance.id
         employee_name = instance.full_name
-        user = instance.user
-        instance.delete()
+        _soft_delete_instance(
+            instance,
+            self.request.user,
+            "Employee",
+            f"Employee: {employee_name}",
+            self.request.data.get("reason", "") if hasattr(self.request, "data") else "",
+        )
+        if instance.user:
+            instance.user.is_active = False
+            instance.user.save(update_fields=["is_active"])
+
+    def destroy(self, request, *args, **kwargs):
+        employee = self.get_object()
+        activities = _employee_delete_activities(employee)
+        if activities:
+            return _activity_response("Employee", activities)
+        self.perform_destroy(employee)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
+    def restore(self, request, pk=None):
+        employee = get_object_or_404(Employee.objects.all(), pk=pk)
+        _restore_instance(employee, request.user, "Employee", f"Employee: {employee.full_name}")
+        _sync_employee_user_active_state(employee)
+        return Response(self.get_serializer(employee).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["delete"], permission_classes=[IsHeadOffice])
+    def permanent_delete(self, request, pk=None):
+        employee = get_object_or_404(Employee.objects.all(), pk=pk)
+        activities = _employee_delete_activities(employee)
+        if activities:
+            return _activity_response("Employee", activities)
+        employee_id = employee.id
+        employee_name = employee.full_name
+        user = employee.user
+        employee.delete()
         if user:
             user.delete()
         AuditService.log_action(
-            self.request.user,
-            "EMPLOYEE_DELETED",
+            request.user,
+            "EMPLOYEE_PERMANENTLY_DELETED",
             "Employee",
             employee_id,
             f"Employee: {employee_name}",
         )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"], permission_classes=[IsHeadOffice])
     def set_exit_status(self, request, pk=None):
@@ -497,6 +700,10 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = Device.objects.select_related("assigned_employee", "assigned_branch")
+        if _deleted_only(self.request):
+            queryset = queryset.filter(is_deleted=True)
+        elif not _include_deleted(self.request):
+            queryset = queryset.filter(is_deleted=False)
         user = self.request.user
         if user.is_authenticated and user.role == "EMPLOYEE":
             return queryset.filter(assigned_employee__user=user)
@@ -508,13 +715,22 @@ class DeviceViewSet(viewsets.ModelViewSet):
         return DeviceSerializer
 
     def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy"]:
+        if self.action in ["create", "update", "partial_update", "destroy", "decommission", "restore", "permanent_delete"]:
             return [CanManageDevices()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
         """Set created device as available."""
         device = serializer.save(status="AVAILABLE")
+        DeviceLocationHistory.objects.create(
+            device=device,
+            location_type=device.location_type,
+            location=device.current_location,
+            action="DEVICE_CREATED",
+            status=device.status,
+            updated_by=self.request.user,
+            notes="Initial device location",
+        )
         AuditService.log_action(
             self.request.user,
             "DEVICE_CREATED",
@@ -536,32 +752,64 @@ class DeviceViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         device_id = instance.id
         device_tag = instance.company_tag
-        instance.delete()
-        AuditService.log_action(
+        _soft_delete_instance(
+            instance,
             self.request.user,
-            "DEVICE_DELETED",
             "Device",
-            device_id,
             f"Device: {device_tag}",
+            self.request.data.get("reason", "") if hasattr(self.request, "data") else "",
         )
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        if instance.has_activity_history():
-            return Response(
-                {
-                    "error": (
-                        "Device cannot be deleted because it has related "
-                        "activity/history."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        activities = _device_delete_activities(instance)
+        if activities:
+            return _activity_response("Device", activities)
 
         try:
             return super().destroy(request, *args, **kwargs)
         except DjangoValidationError as exc:
             return Response({"error": "; ".join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["post"], permission_classes=[CanManageDevices])
+    def restore(self, request, pk=None):
+        device = get_object_or_404(Device.objects.all(), pk=pk)
+        _restore_instance(device, request.user, "Device", f"Device: {device.company_tag}")
+        return Response(self.get_serializer(device).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], permission_classes=[CanManageDevices])
+    def decommission(self, request, pk=None):
+        reason = request.data.get("reason", "").strip()
+        notes = request.data.get("notes", "").strip()
+        try:
+            device = DeviceLifecycleService.decommission_device(pk, request.user, reason, notes)
+            return Response(self.get_serializer(device).data, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
+    def location_history(self, request, pk=None):
+        device = get_object_or_404(Device.objects.all(), pk=pk)
+        history = device.location_history.select_related("updated_by").all()
+        return Response(DeviceLocationHistorySerializer(history, many=True).data)
+
+    @action(detail=True, methods=["delete"], permission_classes=[CanManageDevices])
+    def permanent_delete(self, request, pk=None):
+        device = get_object_or_404(Device.objects.all(), pk=pk)
+        activities = _device_delete_activities(device)
+        if activities:
+            return _activity_response("Device", activities)
+        device_id = device.id
+        device_tag = device.company_tag
+        device.delete()
+        AuditService.log_action(
+            request.user,
+            "DEVICE_PERMANENTLY_DELETED",
+            "Device",
+            device_id,
+            f"Device: {device_tag}",
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # =========================
@@ -1031,6 +1279,14 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
     filterset_fields = ["branch"]
     ordering = ["-start_date"]
 
+    def get_queryset(self):
+        queryset = InventorySession.objects.select_related("branch", "created_by")
+        if _deleted_only(self.request):
+            return queryset.filter(is_deleted=True)
+        if not _include_deleted(self.request):
+            queryset = queryset.filter(is_deleted=False)
+        return queryset
+
     def get_permissions(self):
         if self.action in [
             "create",
@@ -1085,16 +1341,45 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
-        session_id = instance.id
-        branch_name = instance.branch.name
-        instance.delete()
-        AuditService.log_action(
+        _soft_delete_instance(
+            instance,
             self.request.user,
-            "INVENTORY_SESSION_DELETED",
+            "InventorySession",
+            f"Session for {instance.branch.name}",
+            self.request.data.get("reason", "") if hasattr(self.request, "data") else "",
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        session = self.get_object()
+        activities = _inventory_delete_activities(session)
+        if activities:
+            return _activity_response("InventorySession", activities)
+        self.perform_destroy(session)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], permission_classes=[CanCreateInventorySession])
+    def restore(self, request, pk=None):
+        session = get_object_or_404(InventorySession.objects.all(), pk=pk)
+        _restore_instance(session, request.user, "InventorySession", f"Session for {session.branch.name}")
+        return Response(self.get_serializer(session).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["delete"], permission_classes=[CanCreateInventorySession])
+    def permanent_delete(self, request, pk=None):
+        session = get_object_or_404(InventorySession.objects.all(), pk=pk)
+        activities = _inventory_delete_activities(session)
+        if activities:
+            return _activity_response("InventorySession", activities)
+        session_id = session.id
+        branch_name = session.branch.name
+        session.delete()
+        AuditService.log_action(
+            request.user,
+            "INVENTORYSESSION_PERMANENTLY_DELETED",
             "InventorySession",
             session_id,
             f"Session for {branch_name}",
         )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"], permission_classes=[CanCreateInventorySession])
     def approve_head_office(self, request, pk=None):
@@ -1517,6 +1802,11 @@ def _device_audit_timeline(device):
         .filter(device=device)
         .order_by("session__start_date")
     )
+    location_events = list(
+        DeviceLocationHistory.objects.select_related("updated_by")
+        .filter(device=device)
+        .order_by("timestamp")
+    )
 
     assignment_ids = [assignment.id for assignment in assignments]
     repair_ids = [repair.id for repair in repairs]
@@ -1648,6 +1938,23 @@ def _device_audit_timeline(device):
                     ("Branch", item.session.branch.name if item.session.branch else "-"),
                     ("Inventory status", item.get_status_display()),
                     ("Comment", item.comment or "-"),
+                ],
+            }
+        )
+
+    for event in location_events:
+        timeline.append(
+            {
+                "timestamp": event.timestamp,
+                "title": "Location updated",
+                "description": event.location,
+                "badge": event.action.replace("_", " ").title(),
+                "user": event.updated_by.username if event.updated_by else "System",
+                "details": [
+                    ("Location type", event.get_location_type_display()),
+                    ("Device status", event.status or "-"),
+                    ("Action", event.action),
+                    ("Notes", event.notes or "-"),
                 ],
             }
         )
@@ -1855,23 +2162,23 @@ def head_office_dashboard(request):
     from django.db.models import Count, Q
     
     # Device Statistics
-    total_devices = Device.objects.count()
-    assigned_devices = Device.objects.filter(status='ASSIGNED').count()
-    available_devices = Device.objects.filter(status='AVAILABLE').count()
-    in_repair_devices = Device.objects.filter(status='IN_REPAIR').count()
-    missing_devices = Device.objects.filter(status='MISSING').count()
+    total_devices = Device.objects.filter(is_deleted=False).count()
+    assigned_devices = Device.objects.filter(status='ASSIGNED', is_deleted=False).count()
+    available_devices = Device.objects.filter(status='AVAILABLE', is_deleted=False).count()
+    in_repair_devices = Device.objects.filter(status='IN_REPAIR', is_deleted=False).count()
+    missing_devices = Device.objects.filter(status='MISSING', is_deleted=False).count()
     
     # Calculate percentages
     percentage_assigned = round((assigned_devices / total_devices * 100) if total_devices > 0 else 0, 1)
     
     # Employee Statistics
-    total_employees = Employee.objects.count()
-    active_employees = Employee.objects.filter(status='ACTIVE').count()
-    inactive_employees = Employee.objects.filter(status='INACTIVE').count()
-    exited_employees = Employee.objects.filter(status='EXITED').count()
+    total_employees = Employee.objects.filter(is_deleted=False).count()
+    active_employees = Employee.objects.filter(status='ACTIVE', is_deleted=False).count()
+    inactive_employees = Employee.objects.filter(status='INACTIVE', is_deleted=False).count()
+    exited_employees = Employee.objects.filter(status='EXITED', is_deleted=False).count()
     
     # Branch Statistics
-    total_branches = Branch.objects.count()
+    total_branches = Branch.objects.filter(is_deleted=False).count()
     
     # Repair Statistics
     pending_repairs = RepairRequest.objects.filter(status='PENDING').count()
@@ -1885,13 +2192,13 @@ def head_office_dashboard(request):
     recent_repairs = RepairRequest.objects.select_related('device', 'employee', 'approved_by').order_by('-request_date')[:5]
     
     # Device Status Distribution for Charts
-    device_status_data = Device.objects.values('status').annotate(count=Count('id'))
+    device_status_data = Device.objects.filter(is_deleted=False).values('status').annotate(count=Count('id'))
     
     # Device Type Distribution
-    device_type_data = Device.objects.values('device_type').annotate(count=Count('id'))
+    device_type_data = Device.objects.filter(is_deleted=False).values('device_type').annotate(count=Count('id'))
     
     # Devices per Branch
-    branch_device_data = Device.objects.values('assigned_branch__name').annotate(count=Count('id')).exclude(assigned_branch__isnull=True)
+    branch_device_data = Device.objects.filter(is_deleted=False).values('assigned_branch__name').annotate(count=Count('id')).exclude(assigned_branch__isnull=True)
     
     context = {
         # Key Metrics
@@ -1934,8 +2241,8 @@ def head_office_dashboard(request):
 def branch_manager_dashboard(request):
     employee = _employee_for_user(request.user)
     branch = employee.branch if employee else None
-    devices = Device.objects.filter(assigned_branch=branch) if branch else Device.objects.none()
-    employees = Employee.objects.filter(branch=branch) if branch else Employee.objects.none()
+    devices = Device.objects.filter(assigned_branch=branch, is_deleted=False) if branch else Device.objects.none()
+    employees = Employee.objects.filter(branch=branch, is_deleted=False) if branch else Employee.objects.none()
     repairs = RepairRequest.objects.select_related("device", "employee").filter(
         device__assigned_branch=branch
     ) if branch else RepairRequest.objects.none()
@@ -1968,7 +2275,7 @@ def branch_manager_dashboard(request):
 @role_required("EMPLOYEE")
 def employee_dashboard(request):
     employee = Employee.objects.filter(user=request.user).first()
-    devices = Device.objects.filter(assigned_employee=employee) if employee else Device.objects.none()
+    devices = Device.objects.filter(assigned_employee=employee, is_deleted=False) if employee else Device.objects.none()
     repairs = RepairRequest.objects.filter(employee=employee) if employee else RepairRequest.objects.none()
     context = {
         "employee": employee,
@@ -2049,7 +2356,7 @@ def technician_repair_history(request):
 @role_required("HEAD_OFFICE", "BRANCH_MANAGER", "TECHNICIAN", "EMPLOYEE")
 def employee_my_devices(request):
     employee = _employee_for_user(request.user)
-    devices = Device.objects.select_related("assigned_branch").filter(assigned_employee=employee) if employee else Device.objects.none()
+    devices = Device.objects.select_related("assigned_branch").filter(assigned_employee=employee, is_deleted=False) if employee else Device.objects.none()
     return render(request, "Employee/MyDevices.html", {"employee": employee, "devices": devices})
 
 
@@ -2057,7 +2364,7 @@ def employee_my_devices(request):
 @role_required("HEAD_OFFICE", "BRANCH_MANAGER", "TECHNICIAN", "EMPLOYEE")
 def employee_request_repair(request):
     employee = _employee_for_user(request.user)
-    devices = Device.objects.filter(assigned_employee=employee).exclude(status__in=["RETIRED", "MISSING"]) if employee else Device.objects.none()
+    devices = Device.objects.filter(assigned_employee=employee, is_deleted=False).exclude(status__in=["RETIRED", "MISSING", "DECOMMISSIONED"]) if employee else Device.objects.none()
     if employee:
         open_device_ids = RepairRequest.objects.filter(
             employee=employee,
@@ -2084,11 +2391,12 @@ def employee_repair_requests(request):
 @role_required("HEAD_OFFICE")
 def head_office_employees(request):
     """Employee management view."""
+    show_deleted = request.GET.get("deleted") == "1"
     employees = Employee.objects.select_related(
         'user', 'branch', 'department'
-    ).prefetch_related('device_set').all()
-    branches = Branch.objects.all()
-    departments = Department.objects.all()
+    ).prefetch_related('device_set').filter(is_deleted=show_deleted)
+    branches = Branch.objects.filter(is_deleted=False)
+    departments = Department.objects.filter(is_deleted=False)
     users = User.objects.filter(role__in=['EMPLOYEE', 'BRANCH_MANAGER', 'TECHNICIAN'])
     
     context = {
@@ -2097,6 +2405,7 @@ def head_office_employees(request):
         'departments': departments,
         'users': users,
         'statuses': Employee._meta.get_field('status').choices,
+        'show_deleted': show_deleted,
     }
     return render(request, "HeadOffice/Employee.html", context)
 
@@ -2105,14 +2414,16 @@ def head_office_employees(request):
 @role_required("HEAD_OFFICE")
 def head_office_branches(request):
     """Branch and department management view."""
+    show_deleted = request.GET.get("deleted") == "1"
     branches = Branch.objects.prefetch_related(
         'departments',
         'employees',
         'employees__device_set',
         'employees__department',
-    ).all()
+    ).filter(is_deleted=show_deleted)
     context = {
         'branches': branches,
+        'show_deleted': show_deleted,
     }
     return render(request, "HeadOffice/Branches.html", context)
 
@@ -2121,8 +2432,10 @@ def head_office_branches(request):
 @role_required("HEAD_OFFICE")
 def head_office_departments(request):
     """Global department registration view."""
+    show_deleted = request.GET.get("deleted") == "1"
     department_names = (
-        Department.objects.values("name")
+        Department.objects.filter(is_deleted=show_deleted)
+        .values("name")
         .annotate(branch_count=Count("branch", distinct=True), first_id=Min("id"))
         .order_by("name")
     )
@@ -2131,7 +2444,8 @@ def head_office_departments(request):
         "HeadOffice/Departments.html",
         {
             "department_names": department_names,
-            "branch_count": Branch.objects.count(),
+            "branch_count": Branch.objects.filter(is_deleted=False).count(),
+            "show_deleted": show_deleted,
         },
     )
 
@@ -2140,14 +2454,21 @@ def head_office_departments(request):
 @role_required("HEAD_OFFICE")
 def head_office_devices(request):
     """Device management view."""
-    devices = Device.objects.select_related('assigned_employee', 'assigned_branch').all()
-    branches = Branch.objects.all()
-    employees = Employee.objects.select_related('branch').filter(status='ACTIVE')
+    show_deleted = request.GET.get("deleted") == "1"
+    device_scope = request.GET.get("scope", "active")
+    devices = Device.objects.select_related('assigned_employee', 'assigned_branch').filter(is_deleted=show_deleted)
+    if device_scope == "decommissioned":
+        devices = devices.filter(status="DECOMMISSIONED")
+    elif device_scope == "active":
+        devices = devices.exclude(status="DECOMMISSIONED")
+    branches = Branch.objects.filter(is_deleted=False)
+    employees = Employee.objects.select_related('branch').filter(status='ACTIVE', is_deleted=False)
     statuses = Device._meta.get_field('status').choices
     location_types = Device._meta.get_field('location_type').choices
     device_types = Device.objects.values_list('device_type', flat=True).distinct()
     device_type_counts = (
-        Device.objects.values('device_type')
+        Device.objects.filter(is_deleted=show_deleted)
+        .values('device_type')
         .annotate(count=Count('id'))
         .order_by('device_type')
     )
@@ -2160,6 +2481,8 @@ def head_office_devices(request):
         'location_types': location_types,
         'device_types': device_types,
         'device_type_counts': device_type_counts,
+        'show_deleted': show_deleted,
+        'device_scope': device_scope,
     }
     return render(request, "HeadOffice/Devices.html", context)
 
@@ -2179,7 +2502,7 @@ def head_office_assignments(request):
     available_devices = Device.objects.select_related('assigned_branch').filter(
         Q(status='AVAILABLE')
         | Q(status__in=['REPAIRED', 'COMPLETED'], assigned_employee__isnull=True)
-    )
+    ).filter(is_deleted=False).exclude(status="DECOMMISSIONED")
     branches = Branch.objects.all()
     
     context = {
@@ -2214,7 +2537,7 @@ def head_office_repairs(request):
         'repairs': repairs,
         'repairs_by_status': repairs_by_status,
         'statuses': RepairRequest._meta.get_field('status').choices,
-        'devices': Device.objects.select_related('assigned_employee').exclude(assigned_employee__isnull=True),
+        'devices': Device.objects.select_related('assigned_employee').filter(is_deleted=False).exclude(assigned_employee__isnull=True).exclude(status="DECOMMISSIONED"),
         'employees': Employee.objects.filter(status='ACTIVE'),
         'technicians': User.objects.select_related('employee').filter(role='TECHNICIAN', is_active=True).order_by('employee__full_name', 'username'),
     }
@@ -2232,15 +2555,17 @@ def head_office_audit_device(request):
 @role_required("HEAD_OFFICE")
 def head_office_inventory(request):
     """Inventory management view."""
+    show_deleted = request.GET.get("deleted") == "1"
     inventory_sessions = InventorySession.objects.select_related(
         'branch', 'created_by'
-    ).prefetch_related('items', 'items__device', 'items__device__assigned_employee').all().order_by('-start_date')
+    ).prefetch_related('items', 'items__device', 'items__device__assigned_employee').filter(is_deleted=show_deleted).order_by('-start_date')
     
-    branches = Branch.objects.all()
+    branches = Branch.objects.filter(is_deleted=False)
     
     context = {
         'inventory_sessions': inventory_sessions,
         'branches': branches,
+        'show_deleted': show_deleted,
     }
     return render(request, "HeadOffice/Inventory.html", context)
 

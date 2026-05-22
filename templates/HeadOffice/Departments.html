@@ -12,9 +12,14 @@
                     <h1 class="h3 mb-0"><i class="feather-grid me-2"></i>Departments</h1>
                     <p class="text-muted mb-0">Register departments once and make them available to every branch.</p>
                 </div>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDepartmentModal">
-                    <i class="feather-plus me-1"></i>New Department
-                </button>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary" href="?deleted={% if show_deleted %}0{% else %}1{% endif %}">
+                        <i class="feather-archive me-1"></i>{% if show_deleted %}Active Records{% else %}Deleted Records{% endif %}
+                    </a>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDepartmentModal">
+                        <i class="feather-plus me-1"></i>New Department
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -43,6 +48,15 @@
                                         <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editDepartmentModal" onclick="openEditDepartmentModal({{ department.first_id }}, '{{ department.name|escapejs }}')">
                                             <i class="feather-edit"></i>Edit department
                                         </button>
+                                        {% if show_deleted %}
+                                        <button class="dropdown-item text-success" type="button" onclick="restoreDepartment({{ department.first_id }})">
+                                            <i class="feather-rotate-ccw"></i>Restore department
+                                        </button>
+                                        {% else %}
+                                        <button class="dropdown-item text-danger" type="button" onclick="deleteDepartment({{ department.first_id }})">
+                                            <i class="feather-trash-2"></i>Delete department
+                                        </button>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </td>
@@ -141,6 +155,29 @@ document.getElementById('editDepartmentForm').addEventListener('submit', functio
 function openEditDepartmentModal(departmentId, name) {
     document.getElementById('editDepartmentId').value = departmentId;
     document.getElementById('editDepartmentName').value = name;
+}
+async function deleteDepartment(departmentId) {
+    if (!(await showAppConfirm('Delete this department? Records with activity will be blocked.', 'Delete Department'))) return;
+    fetch(`/api/departments/${departmentId}/`, {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Department deleted successfully.', 'Error deleting department'));
+}
+function restoreDepartment(departmentId) {
+    fetch(`/api/departments/${departmentId}/restore/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Department restored successfully.', 'Error restoring department'));
+}
+function handleDeleteRestoreResponse(response, successMessage, fallback) {
+    if (response.ok) {
+        showAppMessage(successMessage, 'Success', 'success').then(() => location.reload());
+    } else {
+        response.json().then(e => {
+            const details = e.related_activities ? '\n\n' + e.related_activities.map(item => `${item.type}: ${item.count}`).join('\n') : '';
+            showAppMessage(getApiError(e, fallback) + details, 'Blocked', 'warning');
+        });
+    }
 }
 function getCookie(name) {
     const value = `; ${document.cookie}`;

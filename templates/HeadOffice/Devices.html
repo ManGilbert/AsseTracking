@@ -13,9 +13,14 @@
                     <h1 class="h3 mb-0"><i class="feather-cpu me-2"></i>Device Management</h1>
                     <p class="text-muted mb-0">Register, track, and manage all devices</p>
                 </div>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDeviceModal">
-                    <i class="feather-plus me-1"></i>New Device
-                </button>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary" href="?deleted={% if show_deleted %}0{% else %}1{% endif %}">
+                        <i class="feather-archive me-1"></i>{% if show_deleted %}Active Records{% else %}Deleted Records{% endif %}
+                    </a>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDeviceModal">
+                        <i class="feather-plus me-1"></i>New Device
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -63,6 +68,13 @@
                             <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
                                 <i class="feather-refresh-cw me-1"></i>Reset
                             </button>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a class="btn {% if device_scope == 'active' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?scope=active{% if show_deleted %}&deleted=1{% endif %}">Active Devices</a>
+                                <a class="btn {% if device_scope == 'decommissioned' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?scope=decommissioned{% if show_deleted %}&deleted=1{% endif %}">Decommissioned Devices</a>
+                                <a class="btn {% if device_scope == 'all' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?scope=all{% if show_deleted %}&deleted=1{% endif %}">All Devices</a>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -143,6 +155,20 @@
                                                 <a class="dropdown-item" href="{% url 'head_office_audit_device' %}?q={{ device.company_tag|urlencode }}&device={{ device.id }}">
                                                     <i class="feather-clock"></i>Audit lifecycle
                                                 </a>
+                                                {% if show_deleted %}
+                                                <button class="dropdown-item text-success" type="button" onclick="restoreDevice({{ device.id }})">
+                                                    <i class="feather-rotate-ccw"></i>Restore device
+                                                </button>
+                                                {% else %}
+                                                {% if device.status != 'DECOMMISSIONED' %}
+                                                <button class="dropdown-item text-warning" type="button" data-bs-toggle="modal" data-bs-target="#decommissionDeviceModal" onclick="prepareDecommissionDevice({{ device.id }}, '{{ device.company_tag|escapejs }}')">
+                                                    <i class="feather-slash"></i>Decommission
+                                                </button>
+                                                {% endif %}
+                                                <button class="dropdown-item text-danger" type="button" onclick="deleteDevice({{ device.id }})">
+                                                    <i class="feather-trash-2"></i>Delete device
+                                                </button>
+                                                {% endif %}
                                             </div>
                                         </div>
                                     </td>
@@ -159,6 +185,43 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Decommission Device Modal -->
+<div class="modal fade" id="decommissionDeviceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="decommissionDeviceForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Decommission Device</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="decommissionDeviceId">
+                    <div class="alert alert-warning">Device: <strong id="decommissionDeviceTag"></strong></div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason <span class="text-danger">*</span></label>
+                        <select class="form-select" id="decommissionReason" required>
+                            <option value="">Select reason</option>
+                            <option value="Permanently damaged">Permanently damaged</option>
+                            <option value="Beyond repair">Beyond repair</option>
+                            <option value="Obsolete hardware">Obsolete hardware</option>
+                            <option value="Lost device">Lost device</option>
+                            <option value="Retired from use">Retired from use</option>
+                        </select>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" id="decommissionNotes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Decommission</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -456,6 +519,55 @@ document.getElementById('editDeviceForm').addEventListener('submit', function(e)
         else response.json().then(e => showAppMessage(getApiError(e, 'Error updating device'), 'Error', 'error'));
     });
 });
+
+document.getElementById('decommissionDeviceForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const deviceId = document.getElementById('decommissionDeviceId').value;
+    fetch(`/api/devices/${deviceId}/decommission/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({
+            reason: document.getElementById('decommissionReason').value,
+            notes: document.getElementById('decommissionNotes').value
+        })
+    }).then(response => {
+        if (response.ok) showAppMessage('Device decommissioned successfully.', 'Success', 'success').then(() => location.reload());
+        else response.json().then(e => showAppMessage(getApiError(e, 'Error decommissioning device'), 'Error', 'error'));
+    });
+});
+
+function prepareDecommissionDevice(deviceId, tag) {
+    document.getElementById('decommissionDeviceId').value = deviceId;
+    document.getElementById('decommissionDeviceTag').textContent = tag;
+    document.getElementById('decommissionReason').value = '';
+    document.getElementById('decommissionNotes').value = '';
+}
+
+async function deleteDevice(deviceId) {
+    if (!(await showAppConfirm('Delete this device? Records with activity will be blocked.', 'Delete Device'))) return;
+    fetch(`/api/devices/${deviceId}/`, {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Device deleted successfully.', 'Error deleting device'));
+}
+
+function restoreDevice(deviceId) {
+    fetch(`/api/devices/${deviceId}/restore/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Device restored successfully.', 'Error restoring device'));
+}
+
+function handleDeleteRestoreResponse(response, successMessage, fallback) {
+    if (response.ok) {
+        showAppMessage(successMessage, 'Success', 'success').then(() => location.reload());
+    } else {
+        response.json().then(e => {
+            const details = e.related_activities ? '\n\n' + e.related_activities.map(item => `${item.type}: ${item.count}`).join('\n') : '';
+            showAppMessage(getApiError(e, fallback) + details, 'Blocked', 'warning');
+        });
+    }
+}
 
 function getCookie(name) {
     const value = `; ${document.cookie}`;

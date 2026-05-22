@@ -13,9 +13,14 @@
                     <h1 class="h3 mb-0"><i class="feather-users me-2"></i>Employee Management</h1>
                     <p class="text-muted mb-0">Manage all employees in the system</p>
                 </div>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createEmployeeModal">
-                    <i class="feather-plus me-1"></i>New Employee
-                </button>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary" href="?deleted={% if show_deleted %}0{% else %}1{% endif %}">
+                        <i class="feather-archive me-1"></i>{% if show_deleted %}Active Records{% else %}Deleted Records{% endif %}
+                    </a>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createEmployeeModal">
+                        <i class="feather-plus me-1"></i>New Employee
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -138,6 +143,15 @@
                                                 {% if employee.status != 'EXITED' %}
                                                 <button class="dropdown-item text-danger" type="button" onclick="markEmployeeExited({{ employee.id }})">
                                                     <i class="feather-log-out"></i>Mark exited
+                                                </button>
+                                                {% endif %}
+                                                {% if show_deleted %}
+                                                <button class="dropdown-item text-success" type="button" onclick="restoreEmployee({{ employee.id }})">
+                                                    <i class="feather-rotate-ccw"></i>Restore employee
+                                                </button>
+                                                {% else %}
+                                                <button class="dropdown-item text-danger" type="button" onclick="deleteEmployee({{ employee.id }})">
+                                                    <i class="feather-trash-2"></i>Delete employee
                                                 </button>
                                                 {% endif %}
                                             </div>
@@ -437,6 +451,32 @@ async function resetEmployeePassword(employeeId, employeeName) {
         }
         response.json().then(e => showAppMessage(getApiError(e, 'Error resetting password'), 'Error', 'error'));
     });
+}
+
+async function deleteEmployee(employeeId) {
+    if (!(await showAppConfirm('Delete this employee? Records with activity will be blocked.', 'Delete Employee'))) return;
+    fetch(`/api/employees/${employeeId}/`, {
+        method: 'DELETE',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Employee deleted successfully.', 'Error deleting employee'));
+}
+
+function restoreEmployee(employeeId) {
+    fetch(`/api/employees/${employeeId}/restore/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    }).then(response => handleDeleteRestoreResponse(response, 'Employee restored successfully.', 'Error restoring employee'));
+}
+
+function handleDeleteRestoreResponse(response, successMessage, fallback) {
+    if (response.ok) {
+        showAppMessage(successMessage, 'Success', 'success').then(() => location.reload());
+    } else {
+        response.json().then(e => {
+            const details = e.related_activities ? '\n\n' + e.related_activities.map(item => `${item.type}: ${item.count}`).join('\n') : '';
+            showAppMessage(getApiError(e, fallback) + details, 'Blocked', 'warning');
+        });
+    }
 }
 
 function resetFilters() {

@@ -23,6 +23,7 @@ from .models import (
     InventorySession,
     AuditLog,
     Notification,
+    DeviceLocationHistory,
 )
 
 
@@ -34,6 +35,22 @@ def _notify_user(user, message):
 def _notify_head_office(message):
     for user in User.objects.filter(role="HEAD_OFFICE", is_active=True):
         Notification.objects.create(user=user, message=message)
+
+
+def _record_device_location(device, user, action, location_type=None, location=None, notes=""):
+    if location_type:
+        device.location_type = location_type
+    if location is not None:
+        device.current_location = location
+    DeviceLocationHistory.objects.create(
+        device=device,
+        location_type=device.location_type,
+        location=device.current_location,
+        action=action,
+        status=device.status,
+        updated_by=user,
+        notes=notes or "",
+    )
 
 
 class DeviceAssignmentService:
@@ -79,6 +96,9 @@ class DeviceAssignmentService:
         if device.status == "RETIRED":
             raise ValueError("Cannot assign retired device")
 
+        if device.status == "DECOMMISSIONED":
+            raise ValueError("Cannot assign decommissioned device")
+
         if employee.status != "ACTIVE":
             raise ValueError("Device can only be assigned to an active employee")
 
@@ -112,6 +132,12 @@ class DeviceAssignmentService:
             device.location_type = "EMPLOYEE"
             device.current_location = (
                 f"{employee.branch.name} - {employee.full_name}"
+            )
+            _record_device_location(
+                device,
+                assigned_by_user,
+                "DEVICE_ASSIGNED",
+                notes=f"Assigned to {employee.full_name}",
             )
             device.save()
 
@@ -169,6 +195,12 @@ class DeviceAssignmentService:
             device.assigned_branch = None
             device.location_type = "HEAD_OFFICE"
             device.current_location = "Head Office"
+            _record_device_location(
+                device,
+                returned_by_user,
+                "DEVICE_RETURNED",
+                notes=f"Returned by {assignment.employee.full_name if assignment.employee else 'employee'}",
+            )
             device.save()
 
             # Create audit log
@@ -233,6 +265,8 @@ class RepairService:
             raise ValueError(
                 "This device already has an unfinished repair request."
             )
+        if device.status == "DECOMMISSIONED":
+            raise ValueError("Decommissioned devices cannot request repair")
 
         with transaction.atomic():
             repair_request = RepairRequest.objects.create(
@@ -299,6 +333,18 @@ class RepairService:
 
             # Update device status
             device.status = "IN_REPAIR"
+            _record_device_location(
+                device,
+                approved_by_user,
+                "REPAIR_ASSIGNED_TO_TECHNICIAN",
+                location_type="TECHNICIAN",
+                location="Head Office / Technician Location",
+                notes=(
+                    f"Assigned to technician {technician_user.username}"
+                    if technician_user
+                    else "Assigned to Head Office technician queue"
+                ),
+            )
             device.save()
 
             # Create audit log
@@ -415,6 +461,14 @@ class RepairService:
             repair_request.save()
 
             device.status = "IN_REPAIR"
+            _record_device_location(
+                device,
+                technician_user,
+                "REPAIR_IN_PROGRESS",
+                location_type="TECHNICIAN",
+                location=device.current_location or "Head Office / Technician Location",
+                notes=f"Repair started by {technician_user.username}",
+            )
             device.save()
 
             AuditLog.objects.create(
@@ -479,28 +533,18 @@ class RepairService:
             assigned_employee = device.assigned_employee or repair_request.employee
             assigned_branch = device.assigned_branch or repair_request.employee.branch
 
-            active_assignment = DeviceAssignment.objects.filter(
-                device=device,
-                returned_date__isnull=True,
-            ).first()
-            if not active_assignment and assigned_employee:
-                DeviceAssignment.objects.create(
-                    device=device,
-                    employee=assigned_employee,
-                    branch=assigned_branch,
-                    assigned_by=technician_user,
-                    condition_on_issue="Assignment preserved after repair completion",
-                )
-
-            # Mark repair as completed without removing ownership or branch data.
+            # The repaired device is physically back at Head Office until HO reassigns it.
             device.status = "COMPLETED"
             device.assigned_employee = assigned_employee
             device.assigned_branch = assigned_branch
-            device.location_type = "EMPLOYEE"
-            if assigned_employee and assigned_branch:
-                device.current_location = f"{assigned_branch.name} - {assigned_employee.full_name}"
-            elif assigned_branch:
-                device.current_location = assigned_branch.name
+            _record_device_location(
+                device,
+                technician_user,
+                "REPAIR_COMPLETED_RETURNED_HEAD_OFFICE",
+                location_type="HEAD_OFFICE",
+                location="Head Office",
+                notes=f"Repair completed by {technician_user.username}",
+            )
             device.save()
 
             # Create audit log
@@ -562,6 +606,12 @@ class RepairService:
             device.assigned_branch = branch
             device.location_type = "EMPLOYEE"
             device.current_location = f"{branch.name} - {employee.full_name}" if branch else employee.full_name
+            _record_device_location(
+                device,
+                reassigned_by_user,
+                "REPAIR_REASSIGNED_TO_EMPLOYEE",
+                notes=f"Returned to {employee.full_name}",
+            )
             device.save()
 
             AuditLog.objects.create(
@@ -614,7 +664,10 @@ class InventoryService:
             )
 
             # Auto-load all devices for branch
-            branch_devices = Device.objects.filter(assigned_branch=branch)
+            branch_devices = Device.objects.filter(
+                assigned_branch=branch,
+                is_deleted=False,
+            ).exclude(status="DECOMMISSIONED")
 
             for device in branch_devices:
                 InventoryItem.objects.create(
@@ -689,6 +742,59 @@ class InventoryService:
                     item.session.branch.manager.user,
                     f"Device {device.company_tag} was marked missing during {item.session.branch.name} inventory.",
                 )
+
+
+class DeviceLifecycleService:
+    @staticmethod
+    def decommission_device(device_id, performed_by_user, reason, notes=""):
+        device = Device.objects.get(id=device_id)
+        if performed_by_user.role != "HEAD_OFFICE":
+            raise ValueError("Only Head Office users can decommission devices")
+        if not reason:
+            raise ValueError("Reason for decommission is required")
+        if device.status == "DECOMMISSIONED":
+            raise ValueError("Device is already decommissioned")
+
+        with transaction.atomic():
+            previous_status = device.status
+            previous_location = device.current_location
+            DeviceAssignment.objects.filter(
+                device=device,
+                returned_date__isnull=True,
+            ).update(
+                returned_date=timezone.now(),
+                received_by=performed_by_user,
+                condition_on_return="Closed by decommission action",
+            )
+            device.status = "DECOMMISSIONED"
+            device.assigned_employee = None
+            device.assigned_branch = None
+            device.decommissioned_at = timezone.now()
+            device.decommissioned_by = performed_by_user
+            device.decommission_reason = reason
+            device.decommission_notes = notes or ""
+            device.previous_status_before_decommission = previous_status
+            device.last_location_before_decommission = previous_location
+            _record_device_location(
+                device,
+                performed_by_user,
+                "DEVICE_DECOMMISSIONED",
+                location_type="HEAD_OFFICE",
+                location="Head Office - Decommissioned",
+                notes=reason,
+            )
+            device.save()
+            AuditLog.objects.create(
+                user=performed_by_user,
+                action="DEVICE_DECOMMISSIONED",
+                model_name="Device",
+                object_id=device.id,
+                details=(
+                    f"Reason: {reason}; previous status: {previous_status}; "
+                    f"last location: {previous_location}"
+                ),
+            )
+            return device
 
 
 class EmployeeExitService:
