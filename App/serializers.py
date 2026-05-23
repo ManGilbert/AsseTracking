@@ -263,6 +263,9 @@ class DeviceSerializer(serializers.ModelSerializer):
     decommissioned_by_username = serializers.CharField(
         source="decommissioned_by.username", read_only=True, allow_null=True
     )
+    effective_current_location = serializers.SerializerMethodField()
+    decommissioned_days_ago = serializers.SerializerMethodField()
+    decommission_days_remaining = serializers.SerializerMethodField()
 
     class Meta:
         model = Device
@@ -283,6 +286,7 @@ class DeviceSerializer(serializers.ModelSerializer):
             "assigned_branch_name",
             "location_type",
             "current_location",
+            "effective_current_location",
             "condition_notes",
             "days_assigned",
             "is_deleted",
@@ -293,6 +297,8 @@ class DeviceSerializer(serializers.ModelSerializer):
             "decommissioned_by_username",
             "decommission_reason",
             "decommission_notes",
+            "decommissioned_days_ago",
+            "decommission_days_remaining",
             "previous_status_before_decommission",
             "last_location_before_decommission",
         )
@@ -308,7 +314,19 @@ class DeviceSerializer(serializers.ModelSerializer):
             "decommission_reason",
             "previous_status_before_decommission",
             "last_location_before_decommission",
+            "effective_current_location",
+            "decommissioned_days_ago",
+            "decommission_days_remaining",
         )
+
+    def get_effective_current_location(self, obj):
+        return obj.effective_current_location
+
+    def get_decommissioned_days_ago(self, obj):
+        return obj.decommissioned_days_ago
+
+    def get_decommission_days_remaining(self, obj):
+        return obj.decommission_days_remaining
 
     def get_days_assigned(self, obj):
         """Calculate days since assignment."""

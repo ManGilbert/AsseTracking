@@ -72,9 +72,12 @@
     {% if selected_device %}
     <div class="row g-3 mb-4">
         <div class="col-lg-3 col-md-6"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Registered</h6><div class="fs-5 fw-semibold">{{ selected_device.registered_at|date:"M d, Y H:i" }}</div></div></div></div>
-        <div class="col-lg-3 col-md-6"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Current Status</h6><span class="badge bg-light text-dark">{{ selected_device.get_status_display }}</span></div></div></div>
+        <div class="col-lg-3 col-md-6"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Current Status</h6><div class="fw-semibold">{{ selected_device.get_status_display }}</div></div></div></div>
         <div class="col-lg-3 col-md-6"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Current Employee</h6><div class="fw-semibold">{{ selected_device.assigned_employee.full_name|default:"-" }}</div></div></div></div>
-        <div class="col-lg-3 col-md-6"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Current Location</h6><div class="fw-semibold">{{ selected_device.current_location }}</div></div></div></div>
+        <div class="col-lg-3 col-md-6"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Current Location</h6><div class="fw-semibold">{{ selected_device.effective_current_location|default:"Unknown" }}</div></div></div></div>
+        {% if selected_device.status == 'DECOMMISSIONED' %}
+        <div class="col-lg-3 col-md-6"><div class="card h-100"><div class="card-body"><h6 class="text-muted">Decommission Countdown</h6><div class="fw-semibold">{% if selected_device.decommission_days_remaining > 0 %}{{ selected_device.decommission_days_remaining }} days left{% else %}Location hidden{% endif %}</div></div></div></div>
+        {% endif %}
     </div>
 
     <div class="card mb-4">
@@ -103,7 +106,7 @@
                                 <div>
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <strong>{{ event.title }}</strong>
-                                        <span class="badge bg-light text-dark">{{ event.badge }}</span>
+                                        <span class="small text-secondary">{{ event.badge }}</span>
                                     </div>
                                     <div>{{ event.description }}</div>
                                     <div class="small text-muted mt-1">By {{ event.user }}</div>

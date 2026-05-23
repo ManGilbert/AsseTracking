@@ -428,6 +428,12 @@ function viewDeviceDetails(deviceId) {
                 ['Location Type', data.location_type],
                 ['Current Location', data.current_location],
                 ['Days Assigned', data.days_assigned],
+                ['Current Location', data.effective_current_location],
+                ['Decommissioned Date', data.decommissioned_at],
+                ['Decommission Reason', data.decommission_reason],
+                ['Decommissioned By', data.decommissioned_by_username],
+                ['Days Since Decommission', data.decommissioned_days_ago],
+                ['Days Until Location Hidden', data.decommission_days_remaining],
                 ['Condition Notes', data.condition_notes],
             ];
             document.getElementById('viewDeviceDetailsList').innerHTML = rows.map(([label, value]) => `

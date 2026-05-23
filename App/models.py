@@ -216,6 +216,29 @@ class Device(SoftDeleteModel):
     def __str__(self):
         return f"{self.device_type} - {self.company_tag}"
 
+    @property
+    def decommissioned_days_ago(self):
+        if not self.decommissioned_at:
+            return None
+        return max(0, (timezone.now() - self.decommissioned_at).days)
+
+    @property
+    def decommission_days_remaining(self):
+        if not self.decommissioned_at:
+            return None
+        remaining = 15 - self.decommissioned_days_ago
+        return remaining if remaining >= 0 else 0
+
+    @property
+    def is_decommission_location_hidden(self):
+        return self.status == 'DECOMMISSIONED' and self.decommissioned_at and self.decommissioned_days_ago >= 15
+
+    @property
+    def effective_current_location(self):
+        if self.is_decommission_location_hidden:
+            return None
+        return self.current_location
+
     def has_activity_history(self):
         return (
             self.assignments.exists()
