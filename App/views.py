@@ -81,6 +81,7 @@ from .permissions import (
     CanVerifyInventory,
     CanCreateInventorySession,
     HasAppPermission,
+    HasAnyAppPermission,
 )
 from .decorators import role_required, permission_required
 from .access_control import (
@@ -238,6 +239,8 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ["list", "create"]:
             return [HasAppPermission("view_access_control" if self.action == "list" else "add_employee")]
+        if self.action == "retrieve":
+            return [HasAppPermission("view_access_control")]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -473,6 +476,8 @@ class BranchViewSet(viewsets.ModelViewSet):
                 "destroy": "delete_branch",
             }
             return [HasAppPermission(action_permissions[self.action])]
+        if self.action in ["list", "retrieve"]:
+            return [HasAppPermission("view_branch")]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -586,6 +591,8 @@ class DepartmentViewSet(viewsets.ModelViewSet):
                 "destroy": "delete_department",
             }
             return [HasAppPermission(action_permissions[self.action])]
+        if self.action in ["list", "retrieve"]:
+            return [HasAppPermission("view_department")]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -737,6 +744,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 "activity": "assign_role",
             }
             return [HasAppPermission(action_permissions[self.action])]
+        if self.action in ["list", "retrieve"]:
+            return [HasAnyAppPermission("view_employee", "view_branch_employees")]
         return [IsAuthenticated()]
 
     def get_serializer_context(self):
@@ -971,6 +980,8 @@ class DeviceViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy", "decommission", "restore", "permanent_delete"]:
             return [CanManageDevices()]
+        if self.action in ["list", "retrieve", "location_history"]:
+            return [HasAnyAppPermission("view_device", "view_branch_devices", "view_my_devices", "diagnose_device_issue", "view_device_audit")]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -1094,6 +1105,8 @@ class DeviceAssignmentViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy", "return_device"]:
             return [CanManageAssignments()]
+        if self.action in ["list", "retrieve"]:
+            return [HasAppPermission("view_assignment")]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -1233,6 +1246,8 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
             return [CanApproveRepair()]
         elif self.action in ["update", "partial_update", "destroy"]:
             return [HasAppPermission("update_repair")]
+        elif self.action in ["list", "retrieve"]:
+            return [HasAnyAppPermission("view_repairs", "view_technician_repairs", "view_my_repair_requests")]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -1473,6 +1488,8 @@ class RepairLogViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ["update_repair", "partial_update", "update"]:
             return [CanUpdateRepair()]
+        if self.action in ["list", "retrieve"]:
+            return [HasAnyAppPermission("view_repairs", "view_technician_repairs", "view_my_repair_requests")]
         return [IsAuthenticated()]
 
     @action(
@@ -1555,6 +1572,8 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             if self.action == "approve_branch":
                 return [HasAppPermission("approve_inventory")]
             return [CanCreateInventorySession()]
+        if self.action in ["list", "retrieve"]:
+            return [HasAnyAppPermission("view_inventory", "participate_inventory_verification")]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -1784,6 +1803,8 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             "partial_update",
         ]:
             return [CanVerifyInventory()]
+        if self.action in ["list", "retrieve"]:
+            return [HasAnyAppPermission("view_inventory", "participate_inventory_verification")]
         return [IsAuthenticated()]
 
     @action(detail=True, methods=["post"], permission_classes=[CanVerifyInventory])
@@ -1981,7 +2002,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = AuditLog.objects.all()
     serializer_class = AuditLogSerializer
-    permission_classes = [IsHeadOffice]
+    permission_classes = [HasAppPermission("view_audit_logs")]
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -2504,7 +2525,7 @@ def head_office_dashboard(request):
 
 
 @login_required
-@role_required("BRANCH_MANAGER")
+@permission_required("view_branch_devices")
 def branch_manager_dashboard(request):
     employee = _employee_for_user(request.user)
     branch = employee.branch if employee else None
@@ -2539,7 +2560,7 @@ def branch_manager_dashboard(request):
 
 
 @login_required
-@role_required("EMPLOYEE")
+@permission_required("view_my_devices")
 def employee_dashboard(request):
     employee = Employee.objects.filter(user=request.user).first()
     devices = Device.objects.filter(assigned_employee=employee, is_deleted=False) if employee else Device.objects.none()

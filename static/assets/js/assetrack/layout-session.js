@@ -19,6 +19,7 @@ class AsseTrackSession {
         this.setupInactivityTimeout();
         this.updateUI();
         this.startTokenRefreshTimer();
+        this.startAccessControlRefresh();
     }
 
     loadUserFromStorage() {
@@ -232,6 +233,35 @@ class AsseTrackSession {
 
         // Load notifications
         this.loadNotifications();
+    }
+
+    startAccessControlRefresh() {
+        if (!window.currentUser) return;
+        this.refreshAccessControl();
+        setInterval(() => this.refreshAccessControl(), 20000);
+    }
+
+    async refreshAccessControl() {
+        try {
+            const response = await fetch(`${this.apiBase}/access-control/me/`, {
+                headers: {'Content-Type': 'application/json'}
+            });
+            if (!response.ok) return;
+            const access = await response.json();
+            const permissions = new Set(access.permissions || []);
+            window.currentUser.permissions = access.permissions || [];
+            document.querySelectorAll('[data-required-permission]').forEach((item) => {
+                item.hidden = !permissions.has(item.dataset.requiredPermission);
+            });
+            document.querySelectorAll('.nxl-navbar > .nxl-item.nxl-hasmenu').forEach((group) => {
+                const permissionItems = Array.from(group.querySelectorAll('[data-required-permission]'));
+                if (permissionItems.length) {
+                    group.hidden = permissionItems.every((item) => item.hidden);
+                }
+            });
+        } catch (error) {
+            console.error('Failed to refresh access control:', error);
+        }
     }
 
     async loadNotifications() {

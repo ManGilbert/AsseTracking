@@ -191,3 +191,13 @@ class HasAppPermission(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return user_has_permission(request.user, self.codename)
+
+
+class HasAnyAppPermission(permissions.BasePermission):
+    message = "You do not have permission to access this resource."
+
+    def __init__(self, *codenames):
+        self.codenames = codenames
+
+    def has_permission(self, request, view):
+        return any(user_has_permission(request.user, codename) for codename in self.codenames)

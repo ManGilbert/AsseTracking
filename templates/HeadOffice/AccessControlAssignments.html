@@ -4,26 +4,53 @@
 
 {% block content %}
 <div class="main-content">
-    <div class="page-header">
-        <div class="page-header-left d-flex align-items-center">
-            <div class="page-header-title">
-                <h5 class="m-b-10">Role Assignment</h5>
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div>
+                <h1 class="h3 mb-0"><i class="feather-user-check me-2"></i>Role Assignment</h1>
+                <p class="text-muted mb-0">Assign system and custom roles to employee accounts</p>
             </div>
         </div>
     </div>
 
-    <div class="main-content-body">
-        <div class="card">
-            <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
-                <h5 class="mb-0">Employees</h5>
-                <div class="input-group" style="max-width: 380px;">
-                    <span class="input-group-text"><i class="feather-search"></i></span>
-                    <input type="search" class="form-control" id="searchAssignments" data-table-search="#roleAssignmentsTable" placeholder="Search employees...">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <input type="text" class="form-control" id="searchAssignments" data-table-search="#roleAssignmentsTable" placeholder="Search by employee, branch, role...">
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="filterAssignmentRole" data-table-filter="#roleAssignmentsTable" data-filter-column="4">
+                                <option value="">All Roles</option>
+                                {% for role in roles %}
+                                <option value="{{ role.name }}">{{ role.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-secondary w-100" onclick="resetAssignmentFilters()">
+                                <i class="feather-refresh-cw me-1"></i>Reset
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" id="roleAssignmentsTable">
-                    <thead>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Employees ({{ employees.count }})</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle mb-0" id="roleAssignmentsTable">
+                    <thead class="table-light">
                         <tr>
                             <th>Employee</th>
                             <th>Branch</th>
@@ -60,9 +87,12 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
+        </div>
     </div>
+</div>
 </div>
 
 <div class="modal fade" id="assignmentModal" tabindex="-1">
@@ -136,6 +166,12 @@ function openAssignmentModal(userId, employeeName, currentRole) {
         option.selected = option.value === currentRole || option.dataset.code === currentRole;
     });
     bootstrap.Modal.getOrCreateInstance(document.getElementById('assignmentModal')).show();
+}
+
+function resetAssignmentFilters() {
+    document.getElementById('searchAssignments').value = '';
+    document.getElementById('filterAssignmentRole').value = '';
+    window.AsseTrackTableSearch.filterTable(document.getElementById('searchAssignments'));
 }
 
 document.getElementById('assignmentForm').addEventListener('submit', function (event) {

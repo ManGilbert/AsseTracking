@@ -116,7 +116,7 @@
                                 </a>
                                 <ul class="nxl-submenu">
                                     {% for menu_item in menu_group.items %}
-                                        <li class="nxl-item"><a class="nxl-link" href="{% url menu_item.url_name %}">{{ menu_item.label }}</a></li>
+                                        <li class="nxl-item" data-required-permission="{{ menu_item.permission }}"><a class="nxl-link" href="{% url menu_item.url_name %}">{{ menu_item.label }}</a></li>
                                     {% endfor %}
                                 </ul>
                             </li>

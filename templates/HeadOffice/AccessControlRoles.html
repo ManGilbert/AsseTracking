@@ -4,31 +4,57 @@
 
 {% block content %}
 <div class="main-content">
-    <div class="page-header">
-        <div class="page-header-left d-flex align-items-center">
-            <div class="page-header-title">
-                <h5 class="m-b-10">Roles Management</h5>
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0"><i class="feather-shield me-2"></i>Roles Management</h1>
+                    <p class="text-muted mb-0">Create roles and manage module permissions</p>
+                </div>
+                <button class="btn btn-primary" type="button" onclick="openRoleModal()">
+                    <i class="feather-plus me-1"></i>Create Role
+                </button>
             </div>
-        </div>
-        <div class="page-header-right ms-auto">
-            <button class="btn btn-primary" type="button" onclick="openRoleModal()">
-                <i class="feather-plus me-2"></i>Create Role
-            </button>
         </div>
     </div>
 
-    <div class="main-content-body">
-        <div class="card">
-            <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
-                <h5 class="mb-0">Roles</h5>
-                <div class="input-group" style="max-width: 360px;">
-                    <span class="input-group-text"><i class="feather-search"></i></span>
-                    <input type="search" class="form-control" id="searchRoles" data-table-search="#rolesTable" placeholder="Search roles...">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <input type="text" class="form-control" id="searchRoles" data-table-search="#rolesTable" placeholder="Search by role, description, type...">
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-select" id="filterRoleType" data-table-filter="#rolesTable" data-filter-column="5">
+                                <option value="">All Types</option>
+                                <option value="System">System</option>
+                                <option value="Custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-secondary w-100" onclick="resetRoleFilters()">
+                                <i class="feather-refresh-cw me-1"></i>Reset
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" id="rolesTable">
-                    <thead>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Roles ({{ roles.count }})</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle mb-0" id="rolesTable">
+                    <thead class="table-light">
                         <tr>
                             <th>Role</th>
                             <th>Description</th>
@@ -66,9 +92,12 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
+        </div>
     </div>
+</div>
 </div>
 
 <div class="modal fade" id="roleModal" tabindex="-1">
@@ -146,6 +175,12 @@ function openRoleModal(id = '', name = '', description = '') {
         input.checked = permissionIds.includes(input.value);
     });
     bootstrap.Modal.getOrCreateInstance(document.getElementById('roleModal')).show();
+}
+
+function resetRoleFilters() {
+    document.getElementById('searchRoles').value = '';
+    document.getElementById('filterRoleType').value = '';
+    window.AsseTrackTableSearch.filterTable(document.getElementById('searchRoles'));
 }
 
 function toggleModulePermissions(button) {
