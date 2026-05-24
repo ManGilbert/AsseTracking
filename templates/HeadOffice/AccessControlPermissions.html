@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Permissions Management{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <div class="page-header">
+        <div class="page-header-title">
+            <h5 class="m-b-10">Permissions Management</h5>
+        </div>
+    </div>
+
+    <div class="main-content-body">
+        {% for module in modules %}
+        <section class="mb-4">
+            <h6 class="fw-bold">{{ module.module_name }}</h6>
+            <p class="text-muted mb-2">{{ module.description }}</p>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead><tr><th>Permission</th><th>Codename</th></tr></thead>
+                    <tbody>
+                        {% for permission in module.permissions.all %}
+                        <tr>
+                            <td>{{ permission.permission_name }}</td>
+                            <td><code>{{ permission.codename }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

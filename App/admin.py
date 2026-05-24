@@ -7,10 +7,30 @@ from .models import *
 # =========================
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
-    list_display = ('username', 'email', 'role', 'is_active', 'is_staff')
-    list_filter = ('role', 'is_active', 'is_staff')
+    list_display = ('username', 'email', 'role', 'dynamic_role', 'is_active', 'is_staff')
+    list_filter = ('role', 'dynamic_role', 'is_active', 'is_staff')
     search_fields = ('username', 'email')
     ordering = ('username',)
+
+
+@admin.register(Module)
+class ModuleAdmin(admin.ModelAdmin):
+    list_display = ('module_name', 'key')
+    search_fields = ('module_name', 'key')
+
+
+@admin.register(Permission)
+class PermissionAdmin(admin.ModelAdmin):
+    list_display = ('permission_name', 'codename', 'module')
+    list_filter = ('module',)
+    search_fields = ('permission_name', 'codename')
+
+
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'is_system', 'created_at')
+    list_filter = ('is_system',)
+    search_fields = ('name', 'code')
 
 
 # =========================

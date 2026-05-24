@@ -10,6 +10,10 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from .views import (
     UserViewSet,
+    RoleViewSet,
+    ModuleViewSet,
+    PermissionViewSet,
+    AccessControlViewSet,
     BranchViewSet,
     DepartmentViewSet,
     EmployeeViewSet,
@@ -28,6 +32,10 @@ router = DefaultRouter()
 
 # Register ViewSets
 router.register(r"users", UserViewSet, basename="user")
+router.register(r"roles", RoleViewSet, basename="role")
+router.register(r"modules", ModuleViewSet, basename="module")
+router.register(r"permissions", PermissionViewSet, basename="permission")
+router.register(r"access-control", AccessControlViewSet, basename="access-control")
 router.register(r"branches", BranchViewSet, basename="branch")
 router.register(r"departments", DepartmentViewSet, basename="department")
 router.register(r"employees", EmployeeViewSet, basename="employee")

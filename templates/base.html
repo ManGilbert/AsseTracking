@@ -82,8 +82,9 @@
             window.currentUser = {
                 username: '{{ request.user.username }}',
                 email: '{{ request.user.email }}',
-                role: '{{ request.user.role }}',
-                fullName: '{{ request.user.get_full_name|default:request.user.username }}'
+                role: '{{ request.user.effective_role_name }}',
+                fullName: '{{ request.user.get_full_name|default:request.user.username }}',
+                permissions: [{% for permission in user_permissions %}'{{ permission }}'{% if not forloop.last %},{% endif %}{% endfor %}]
             };
         </script>
     {% endif %}
@@ -107,106 +108,19 @@
                                 <span class="nxl-mtext">Dashboard</span>
                             </a>
                         </li>
-                        {% if request.user.role == 'HEAD_OFFICE' %}
+                        {% for menu_group in accessible_menu %}
                             <li class="nxl-item nxl-hasmenu">
                                 <a href="javascript:void(0);" class="nxl-link">
-                                    <span class="nxl-micon"><i class="feather-briefcase"></i></span>
-                                    <span class="nxl-mtext">Head Office</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
+                                    <span class="nxl-micon"><i class="{{ menu_group.icon }}"></i></span>
+                                    <span class="nxl-mtext">{{ menu_group.label }}</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
                                 </a>
                                 <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_employees' %}">Employee</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_branches' %}">Branches</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_departments' %}">Departments</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_devices' %}">Devices</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_assignments' %}">Assignments</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_repairs' %}">Repairs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_inventory' %}">Inventory</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_audit_device' %}">Audit Device</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_audit_logs' %}">Audit Logs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'head_office_reports' %}">Reports</a></li>
+                                    {% for menu_item in menu_group.items %}
+                                        <li class="nxl-item"><a class="nxl-link" href="{% url menu_item.url_name %}">{{ menu_item.label }}</a></li>
+                                    {% endfor %}
                                 </ul>
                             </li>
-
-                            <li class="nxl-item nxl-hasmenu">
-                                <a href="javascript:void(0);" class="nxl-link">
-                                    <span class="nxl-micon"><i class="feather-user"></i></span>
-                                    <span class="nxl-mtext">Employee</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
-                                </a>
-                                <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_my_devices' %}">My Devices</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_request_repair' %}">Request Repair</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_repair_requests' %}">Repair Requests</a></li>
-                                </ul>
-                            </li>
-                        {% endif %}
-                        {% if request.user.role == 'BRANCH_MANAGER' %}
-                            <li class="nxl-item nxl-hasmenu">
-                                <a href="javascript:void(0);" class="nxl-link">
-                                    <span class="nxl-micon"><i class="feather-home"></i></span>
-                                    <span class="nxl-mtext">Branch Manager</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
-                                </a>
-                                <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'branch_devices' %}">Branch Devices</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'branch_employees' %}">Branch Employees</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'branch_inventory_verification' %}">Inventory Verification</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'branch_reports' %}">Reports</a></li>
-                                </ul>
-
-                            </li>
-
-                            <li class="nxl-item nxl-hasmenu">
-                                <a href="javascript:void(0);" class="nxl-link">
-                                    <span class="nxl-micon"><i class="feather-user"></i></span>
-                                    <span class="nxl-mtext">Employee</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
-                                </a>
-                                <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_my_devices' %}">My Devices</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_request_repair' %}">Request Repair</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_repair_requests' %}">Repair Requests</a></li>
-                                </ul>
-                            </li>
-                        {% endif %}
-                        {% if request.user.role == 'EMPLOYEE' %}
-                            <li class="nxl-item nxl-hasmenu">
-                                <a href="javascript:void(0);" class="nxl-link">
-                                    <span class="nxl-micon"><i class="feather-user"></i></span>
-                                    <span class="nxl-mtext">Employee</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
-                                </a>
-                                <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_my_devices' %}">My Devices</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_request_repair' %}">Request Repair</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_repair_requests' %}">Repair Requests</a></li>
-                                </ul>
-                            </li>
-                        {% endif %}
-                        {% if request.user.role == 'TECHNICIAN' %}
-                            <li class="nxl-item nxl-hasmenu">
-                                <a href="javascript:void(0);" class="nxl-link">
-                                    <span class="nxl-micon"><i class="feather-settings"></i></span>
-                                    <span class="nxl-mtext">Technician Task</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
-                                </a>
-                                <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_repairs' %}">Repairs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_in_progress_repairs' %}">In Progress Repairs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_completed_repairs' %}">Completed Repairs</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_device_lookup' %}">Device Lookup</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'technician_repair_history' %}">Repair History</a></li>
-                                </ul>
-                            </li>
-
-
-                            <li class="nxl-item nxl-hasmenu">
-                                <a href="javascript:void(0);" class="nxl-link">
-                                    <span class="nxl-micon"><i class="feather-user"></i></span>
-                                    <span class="nxl-mtext">Employee</span><span class="nxl-arrow"><i class="feather-chevron-right"></i></span>
-                                </a>
-                                <ul class="nxl-submenu">
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_my_devices' %}">My Devices</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_request_repair' %}">Request Repair</a></li>
-                                    <li class="nxl-item"><a class="nxl-link" href="{% url 'employee_repair_requests' %}">Repair Requests</a></li>
-                                </ul>
-                            </li>
-                        {% endif %}
+                        {% endfor %}
                     {% else %}
                         <li class="nxl-item">
                             <a href="{% url 'login' %}" class="nxl-link">
@@ -315,7 +229,7 @@
                                     <div>
                                         <h6 class="text-dark mb-0">{{ request.user.get_full_name|default:request.user.username }}</h6>
                                         <span class="fs-12 fw-medium text-muted">{{ request.user.email }}</span>
-                                        <div class="fs-11 text-primary fw-semibold text-uppercase mt-1">{{ request.user.role }}</div>
+                                        <div class="fs-11 text-primary fw-semibold text-uppercase mt-1">{{ request.user.effective_role_name }}</div>
                                     </div>
                                 </div>
                             </div>

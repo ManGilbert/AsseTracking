@@ -197,9 +197,9 @@
                     <div class="col-md-6">
                         <label class="form-label">Role <span class="text-danger">*</span></label>
                         <select class="form-select" id="loginRole" required>
-                            <option value="EMPLOYEE">Employee</option>
-                            <option value="BRANCH_MANAGER">Branch Manager</option>
-                            <option value="TECHNICIAN">Technician</option>
+                            {% for role in role_options %}
+                                <option value="{% if role.code %}{{ role.code }}{% else %}ROLE:{{ role.id }}{% endif %}">{{ role.name }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Role Assignment{% endblock %}
+
+{% block content %}
+<div class="main-content">
+    <div class="page-header">
+        <div class="page-header-title">
+            <h5 class="m-b-10">Role Assignment</h5>
+        </div>
+    </div>
+
+    <div class="main-content-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Branch</th>
+                        <th>Current Role</th>
+                        <th>Update Role</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for employee in employees %}
+                    <tr>
+                        <td>{{ employee.full_name }}</td>
+                        <td>{{ employee.branch.name|default:"-" }}</td>
+                        <td>{{ employee.user.effective_role_name|default:"-" }}</td>
+                        <td>
+                            {% if employee.user %}
+                            <div class="input-group input-group-sm">
+                                <select class="form-select assignment-role" data-user-id="{{ employee.user.id }}">
+                                    {% for role in roles %}
+                                    <option value="{{ role.id }}" {% if employee.user.dynamic_role_id == role.id or employee.user.role == role.code %}selected{% endif %}>{{ role.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button class="btn btn-outline-primary assign-role-btn" type="button" data-user-id="{{ employee.user.id }}">
+                                    <i class="feather-save"></i>
+                                </button>
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+document.querySelectorAll('.assign-role-btn').forEach(button => {
+    button.addEventListener('click', function () {
+        const userId = this.dataset.userId;
+        const roleId = document.querySelector(`.assignment-role[data-user-id="${userId}"]`).value;
+        fetch(`/api/roles/${roleId}/assign_user/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+            body: JSON.stringify({user_id: userId})
+        }).then(response => {
+            if (response.ok) location.reload();
+            return response.json().then(data => alert(JSON.stringify(data)));
+        });
+    });
+});
+</script>
+{% endblock %}

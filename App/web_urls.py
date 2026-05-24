@@ -19,6 +19,9 @@ from .views import (
     head_office_inventory_detail,
     head_office_reports,
     head_office_audit_logs,
+    access_control_roles,
+    access_control_permissions,
+    access_control_assignments,
     branch_manager_dashboard,
     branch_devices,
     branch_employees,
@@ -58,6 +61,9 @@ urlpatterns = [
     path("head-office/inventory/<int:session_id>/", head_office_inventory_detail, name="head_office_inventory_detail"),
     path("head-office/reports/", head_office_reports, name="head_office_reports"),
     path("head-office/audit-logs/", head_office_audit_logs, name="head_office_audit_logs"),
+    path("head-office/access-control/roles/", access_control_roles, name="access_control_roles"),
+    path("head-office/access-control/permissions/", access_control_permissions, name="access_control_permissions"),
+    path("head-office/access-control/assignments/", access_control_assignments, name="access_control_assignments"),
     
     # Other Dashboards
     path("dashboard/branch/", branch_manager_dashboard, name="branch_manager_dashboard"),

@@ -9,6 +9,10 @@ from django.db import transaction
 from django.utils import timezone
 from .models import (
     User,
+    Role,
+    Module,
+    Permission,
+    RolePermission,
     Branch,
     Department,
     Employee,
@@ -22,6 +26,7 @@ from .models import (
     AuditLog,
     DeviceLocationHistory,
 )
+from .access_control import SYSTEM_ROLE_LABELS
 
 DEFAULT_EMPLOYEE_PASSWORD = "Aa@2026123"
 
@@ -32,6 +37,9 @@ DEFAULT_EMPLOYEE_PASSWORD = "Aa@2026123"
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model."""
 
+    dynamic_role_name = serializers.CharField(source="dynamic_role.name", read_only=True)
+    effective_role_name = serializers.CharField(read_only=True)
+
     class Meta:
         model = User
         fields = (
@@ -39,6 +47,9 @@ class UserSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "role",
+            "dynamic_role",
+            "dynamic_role_name",
+            "effective_role_name",
             "is_active",
             "date_joined",
         )
@@ -52,7 +63,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("username", "email", "password", "role")
+        fields = ("username", "email", "password", "role", "dynamic_role")
 
     def create(self, validated_data):
         password = validated_data.pop("password")
@@ -60,6 +71,79 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    module_name = serializers.CharField(source="module.module_name", read_only=True)
+    module_key = serializers.CharField(source="module.key", read_only=True)
+
+    class Meta:
+        model = Permission
+        fields = ("id", "module", "module_key", "module_name", "codename", "permission_name", "created_at")
+        read_only_fields = ("id", "created_at")
+
+
+class ModuleSerializer(serializers.ModelSerializer):
+    permissions = PermissionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Module
+        fields = ("id", "key", "module_name", "description", "permissions", "created_at")
+        read_only_fields = ("id", "created_at")
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    permission_ids = serializers.PrimaryKeyRelatedField(
+        source="permissions",
+        queryset=Permission.objects.all(),
+        many=True,
+        write_only=True,
+        required=False,
+    )
+    permissions = PermissionSerializer(many=True, read_only=True)
+    users_count = serializers.IntegerField(source="users.count", read_only=True)
+
+    class Meta:
+        model = Role
+        fields = (
+            "id",
+            "name",
+            "code",
+            "description",
+            "is_system",
+            "permission_ids",
+            "permissions",
+            "users_count",
+            "created_at",
+        )
+        read_only_fields = ("id", "code", "is_system", "created_at")
+
+    def create(self, validated_data):
+        permissions = validated_data.pop("permissions", [])
+        role = Role.objects.create(**validated_data)
+        role.permissions.set(permissions)
+        return role
+
+    def update(self, instance, validated_data):
+        permissions = validated_data.pop("permissions", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if permissions is not None:
+            instance.permissions.set(permissions)
+        return instance
+
+
+class RoleOptionSerializer(serializers.ModelSerializer):
+    value = serializers.SerializerMethodField()
+    label = serializers.CharField(source="name")
+
+    class Meta:
+        model = Role
+        fields = ("id", "value", "label", "code", "is_system")
+
+    def get_value(self, obj):
+        return obj.code or f"ROLE:{obj.id}"
 
 
 # =========================
@@ -107,16 +191,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
     )
     login_username = serializers.CharField(write_only=True, required=False, allow_blank=False)
     login_email = serializers.EmailField(write_only=True, required=False, allow_blank=False)
-    login_role = serializers.ChoiceField(
-        write_only=True,
-        choices=(
-            ("EMPLOYEE", "Employee"),
-            ("BRANCH_MANAGER", "Branch Manager"),
-            ("TECHNICIAN", "Technician"),
-        ),
-        required=False,
-        default="EMPLOYEE",
-    )
+    login_role = serializers.CharField(write_only=True, required=False, default="EMPLOYEE")
+    login_role_name = serializers.CharField(source="user.effective_role_name", read_only=True)
     generated_username = serializers.CharField(source="user.username", read_only=True)
     generated_email = serializers.EmailField(source="user.email", read_only=True)
     default_password = serializers.SerializerMethodField()
@@ -140,6 +216,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "login_username",
             "login_email",
             "login_role",
+            "login_role_name",
             "generated_username",
             "generated_email",
             "default_password",
@@ -184,6 +261,23 @@ class EmployeeSerializer(serializers.ModelSerializer):
         login_username = validated_data.pop("login_username", "").strip()
         login_email = validated_data.pop("login_email", "").strip()
         login_role = validated_data.pop("login_role", "EMPLOYEE")
+        dynamic_role = None
+        system_role = login_role
+        if isinstance(login_role, str) and login_role.startswith("ROLE:"):
+            role_id = login_role.replace("ROLE:", "", 1)
+            try:
+                dynamic_role = Role.objects.get(id=role_id)
+            except Role.DoesNotExist as exc:
+                raise serializers.ValidationError({"login_role": "Selected role does not exist."}) from exc
+            system_role = dynamic_role.code if dynamic_role.code in SYSTEM_ROLE_LABELS else "EMPLOYEE"
+        elif login_role not in SYSTEM_ROLE_LABELS:
+            try:
+                dynamic_role = Role.objects.get(code=login_role)
+                system_role = dynamic_role.code or "EMPLOYEE"
+            except Role.DoesNotExist as exc:
+                raise serializers.ValidationError({"login_role": "Selected role does not exist."}) from exc
+        if system_role == "HEAD_OFFICE":
+            raise serializers.ValidationError({"login_role": "Head Office accounts must be created through user administration."})
         user = validated_data.get("user")
         created_user = False
 
@@ -200,7 +294,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
                 username=username,
                 email=email,
                 password=DEFAULT_EMPLOYEE_PASSWORD,
-                role=login_role,
+                role=system_role,
+                dynamic_role=dynamic_role,
             )
             user.must_change_password = True
             user.save(update_fields=["must_change_password"])
@@ -220,6 +315,7 @@ class EmployeeListSerializer(serializers.ModelSerializer):
     """List serializer for Employee model."""
 
     branch_name = serializers.CharField(source="branch.name", read_only=True)
+    role_name = serializers.CharField(source="user.effective_role_name", read_only=True)
     status = serializers.CharField()
     assigned_devices = serializers.SerializerMethodField()
 
@@ -229,6 +325,7 @@ class EmployeeListSerializer(serializers.ModelSerializer):
             "id",
             "full_name",
             "position",
+            "role_name",
             "branch_name",
             "status",
             "assigned_devices",

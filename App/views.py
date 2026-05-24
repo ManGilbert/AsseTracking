@@ -24,6 +24,9 @@ from django.utils.dateparse import parse_datetime
 
 from .models import (
     User,
+    Role,
+    Module,
+    Permission,
     Branch,
     Department,
     Employee,
@@ -41,6 +44,10 @@ from .models import (
 from .serializers import (
     UserSerializer,
     UserCreateSerializer,
+    RoleSerializer,
+    RoleOptionSerializer,
+    ModuleSerializer,
+    PermissionSerializer,
     BranchSerializer,
     DepartmentSerializer,
     EmployeeSerializer,
@@ -73,8 +80,15 @@ from .permissions import (
     CanUpdateRepair,
     CanVerifyInventory,
     CanCreateInventorySession,
+    HasAppPermission,
 )
-from .decorators import role_required
+from .decorators import role_required, permission_required
+from .access_control import (
+    SYSTEM_ROLE_LABELS,
+    build_accessible_menu,
+    get_user_permission_codenames,
+    user_has_permission,
+)
 
 from .services import (
     DeviceAssignmentService,
@@ -223,7 +237,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["list", "create"]:
-            return [IsHeadOffice()]
+            return [HasAppPermission("view_access_control" if self.action == "list" else "add_employee")]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -233,7 +247,116 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
     def me(self, request):
         serializer = self.get_serializer(request.user)
-        return Response(serializer.data)
+        data = serializer.data
+        data["permissions"] = get_user_permission_codenames(request.user)
+        data["menu"] = build_accessible_menu(request.user)
+        return Response(data)
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+    queryset = Role.objects.prefetch_related("permissions", "permissions__module")
+    serializer_class = RoleSerializer
+    permission_classes = [IsHeadOffice]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["name", "description"]
+    ordering = ["name"]
+
+    def get_permissions(self):
+        action_permissions = {
+            "list": "view_access_control",
+            "retrieve": "view_access_control",
+            "options": "view_access_control",
+            "create": "add_role",
+            "update": "update_role",
+            "partial_update": "update_role",
+            "destroy": "delete_role",
+            "assign_user": "assign_role",
+            "unassign_user": "assign_role",
+        }
+        return [HasAppPermission(action_permissions.get(self.action, "view_access_control"))]
+
+    def destroy(self, request, *args, **kwargs):
+        role = self.get_object()
+        if role.is_system:
+            return Response({"error": "System roles cannot be deleted."}, status=status.HTTP_400_BAD_REQUEST)
+        if role.users.exists():
+            return Response({"error": "Remove this role from users before deleting it."}, status=status.HTTP_400_BAD_REQUEST)
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=False, methods=["get"])
+    def options(self, request):
+        roles = Role.objects.all().order_by("is_system", "name")
+        return Response(RoleOptionSerializer(roles, many=True).data)
+
+    @action(detail=True, methods=["post"])
+    def assign_user(self, request, pk=None):
+        role = self.get_object()
+        user = get_object_or_404(User, pk=request.data.get("user_id"))
+        user.dynamic_role = None if role.is_system else role
+        if role.code in SYSTEM_ROLE_LABELS:
+            user.role = role.code
+        elif user.role == "HEAD_OFFICE":
+            return Response({"error": "Head Office users cannot be downgraded through role assignment."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            user.role = "EMPLOYEE"
+        user.save(update_fields=["role", "dynamic_role"])
+        AuditService.log_action(request.user, "ROLE_ASSIGNED", "User", user.id, f"{user.username} -> {role.name}")
+        return Response(UserSerializer(user).data)
+
+    @action(detail=False, methods=["post"])
+    def unassign_user(self, request):
+        user = get_object_or_404(User, pk=request.data.get("user_id"))
+        if user.role == "HEAD_OFFICE":
+            return Response({"error": "Head Office role cannot be removed."}, status=status.HTTP_400_BAD_REQUEST)
+        user.dynamic_role = None
+        user.role = "EMPLOYEE"
+        user.save(update_fields=["role", "dynamic_role"])
+        AuditService.log_action(request.user, "ROLE_REMOVED", "User", user.id, f"{user.username} -> Employee")
+        return Response(UserSerializer(user).data)
+
+
+class ModuleViewSet(viewsets.ModelViewSet):
+    queryset = Module.objects.prefetch_related("permissions")
+    serializer_class = ModuleSerializer
+    permission_classes = [IsHeadOffice]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ["module_name", "description"]
+    ordering = ["module_name"]
+
+    def get_permissions(self):
+        if self.action in ["create", "update", "partial_update", "destroy"]:
+            return [HasAppPermission("manage_permissions")]
+        return [HasAppPermission("view_access_control")]
+
+
+class PermissionViewSet(viewsets.ModelViewSet):
+    queryset = Permission.objects.select_related("module")
+    serializer_class = PermissionSerializer
+    permission_classes = [IsHeadOffice]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["module"]
+    search_fields = ["permission_name", "codename", "module__module_name"]
+    ordering = ["module__module_name", "permission_name"]
+
+    def get_permissions(self):
+        if self.action in ["create", "update", "partial_update", "destroy"]:
+            return [HasAppPermission("manage_permissions")]
+        return [HasAppPermission("view_access_control")]
+
+
+class AccessControlViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=["get"])
+    def me(self, request):
+        return Response(
+            {
+                "role": request.user.role,
+                "role_name": request.user.effective_role_name,
+                "permissions": get_user_permission_codenames(request.user),
+                "menu": build_accessible_menu(request.user),
+            }
+        )
 
 
 # =========================
@@ -267,7 +390,13 @@ class BranchViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
-            return [IsHeadOffice()]
+            action_permissions = {
+                "create": "add_branch",
+                "update": "update_branch",
+                "partial_update": "update_branch",
+                "destroy": "delete_branch",
+            }
+            return [HasAppPermission(action_permissions[self.action])]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -374,7 +503,13 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
-            return [IsHeadOffice()]
+            action_permissions = {
+                "create": "add_department",
+                "update": "update_department",
+                "partial_update": "update_department",
+                "destroy": "delete_department",
+            }
+            return [HasAppPermission(action_permissions[self.action])]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -515,7 +650,15 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             "set_exit_status",
             "reset_password",
         ]:
-            return [IsHeadOffice()]
+            action_permissions = {
+                "create": "add_employee",
+                "update": "update_employee",
+                "partial_update": "update_employee",
+                "destroy": "delete_employee",
+                "set_exit_status": "update_employee",
+                "reset_password": "reset_employee_password",
+            }
+            return [HasAppPermission(action_permissions[self.action])]
         return [IsAuthenticated()]
 
     def get_serializer_context(self):
@@ -705,7 +848,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
         elif not _include_deleted(self.request):
             queryset = queryset.filter(is_deleted=False)
         user = self.request.user
-        if user.is_authenticated and user.role == "EMPLOYEE":
+        if user.is_authenticated and user.role == "EMPLOYEE" and not getattr(user, "dynamic_role_id", None):
             return queryset.filter(assigned_employee__user=user)
         return queryset
 
@@ -958,9 +1101,9 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
             "approved_by",
         )
         user = self.request.user
-        if user.is_authenticated and user.role == "EMPLOYEE":
+        if user.is_authenticated and user.role == "EMPLOYEE" and not getattr(user, "dynamic_role_id", None):
             return queryset.filter(employee__user=user)
-        if user.is_authenticated and user.role == "TECHNICIAN":
+        if user.is_authenticated and user.role == "TECHNICIAN" and not getattr(user, "dynamic_role_id", None):
             return queryset.filter(
                 Q(repairlog__technician=user)
                 | Q(status="APPROVED", repairlog__isnull=True)
@@ -974,11 +1117,11 @@ class RepairRequestViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "create":
-            return [IsAuthenticated()]
+            return [HasAppPermission("request_repair")]
         elif self.action in ["approve", "reject", "reassign_completed"]:
-            return [IsHeadOffice()]
+            return [CanApproveRepair()]
         elif self.action in ["update", "partial_update", "destroy"]:
-            return [IsHeadOffice()]
+            return [HasAppPermission("update_repair")]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
@@ -1210,9 +1353,9 @@ class RepairLogViewSet(viewsets.ModelViewSet):
             "technician",
         )
         user = self.request.user
-        if user.is_authenticated and user.role == "TECHNICIAN":
+        if user.is_authenticated and user.role == "TECHNICIAN" and not getattr(user, "dynamic_role_id", None):
             return queryset.filter(Q(technician=user) | Q(repair_request__status="COMPLETED"))
-        if user.is_authenticated and user.role == "EMPLOYEE":
+        if user.is_authenticated and user.role == "EMPLOYEE" and not getattr(user, "dynamic_role_id", None):
             return queryset.filter(repair_request__employee__user=user)
         return queryset
 
@@ -1299,7 +1442,7 @@ class InventorySessionViewSet(viewsets.ModelViewSet):
             "register_found_device",
         ]:
             if self.action == "approve_branch":
-                return [IsBranchManager()]
+                return [HasAppPermission("approve_inventory")]
             return [CanCreateInventorySession()]
         return [IsAuthenticated()]
 
@@ -1529,7 +1672,7 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
             "update",
             "partial_update",
         ]:
-            return [IsHeadOffice()]
+            return [CanVerifyInventory()]
         return [IsAuthenticated()]
 
     @action(detail=True, methods=["post"], permission_classes=[CanVerifyInventory])
@@ -1746,6 +1889,19 @@ def _get_dashboard_url(role):
         "TECHNICIAN": "technician_dashboard",
     }
     return reverse(role_dashboard_map.get(role, "login"))
+
+
+def _get_user_dashboard_url(user):
+    dashboard_permissions = [
+        ("view_head_office_dashboard", "head_office_dashboard"),
+        ("view_branch_devices", "branch_manager_dashboard"),
+        ("view_technician_repairs", "technician_dashboard"),
+        ("view_my_devices", "employee_dashboard"),
+    ]
+    for permission, url_name in dashboard_permissions:
+        if user_has_permission(user, permission):
+            return reverse(url_name)
+    return _get_dashboard_url(user.role)
 
 
 def _employee_for_user(user):
@@ -2033,7 +2189,7 @@ def _device_audit_context(request):
 def home_view(request):
     """Root view: redirect to login if not authenticated, dashboard if authenticated."""
     if request.user.is_authenticated:
-        return redirect(_get_dashboard_url(request.user.role))
+        return redirect(_get_user_dashboard_url(request.user))
     return redirect("login")
 
 
@@ -2083,7 +2239,7 @@ def logout_view(request):
 
 @login_required
 def dashboard_redirect(request):
-    return redirect(_get_dashboard_url(request.user.role))
+    return redirect(_get_user_dashboard_url(request.user))
 
 
 @login_required
@@ -2156,7 +2312,7 @@ def first_login_password_change(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_head_office_dashboard")
 def head_office_dashboard(request):
     """Head Office Dashboard with complete system overview."""
     from django.db.models import Count, Q
@@ -2290,7 +2446,7 @@ def employee_dashboard(request):
 
 
 @login_required
-@role_required("TECHNICIAN")
+@permission_required("view_technician_repairs")
 def technician_dashboard(request):
     repairs = RepairRequest.objects.select_related("device", "employee").filter(
         repairlog__technician=request.user
@@ -2308,7 +2464,7 @@ def technician_dashboard(request):
 
 
 @login_required
-@role_required("TECHNICIAN")
+@permission_required("view_technician_repairs")
 def technician_repairs(request):
     repairs = RepairRequest.objects.select_related(
         "device", "device__assigned_branch", "device__assigned_employee", "employee"
@@ -2317,7 +2473,7 @@ def technician_repairs(request):
 
 
 @login_required
-@role_required("TECHNICIAN")
+@permission_required("update_repair_progress")
 def technician_in_progress_repairs(request):
     repairs = RepairRequest.objects.select_related(
         "device", "device__assigned_branch", "employee"
@@ -2326,7 +2482,7 @@ def technician_in_progress_repairs(request):
 
 
 @login_required
-@role_required("TECHNICIAN")
+@permission_required("mark_repair_completed")
 def technician_completed_repairs(request):
     repair_logs = RepairLog.objects.select_related(
         "repair_request", "repair_request__device", "repair_request__employee", "technician"
@@ -2335,7 +2491,7 @@ def technician_completed_repairs(request):
 
 
 @login_required
-@role_required("TECHNICIAN")
+@permission_required("diagnose_device_issue")
 def technician_device_lookup(request):
     devices = Device.objects.select_related("assigned_employee", "assigned_branch").filter(
         repairrequest__repairlog__technician=request.user
@@ -2344,7 +2500,7 @@ def technician_device_lookup(request):
 
 
 @login_required
-@role_required("TECHNICIAN")
+@permission_required("view_technician_repairs")
 def technician_repair_history(request):
     repair_logs = RepairLog.objects.select_related(
         "repair_request", "repair_request__device", "repair_request__employee", "technician"
@@ -2353,7 +2509,7 @@ def technician_repair_history(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE", "BRANCH_MANAGER", "TECHNICIAN", "EMPLOYEE")
+@permission_required("view_my_devices")
 def employee_my_devices(request):
     employee = _employee_for_user(request.user)
     devices = Device.objects.select_related("assigned_branch").filter(assigned_employee=employee, is_deleted=False) if employee else Device.objects.none()
@@ -2361,7 +2517,7 @@ def employee_my_devices(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE", "BRANCH_MANAGER", "TECHNICIAN", "EMPLOYEE")
+@permission_required("submit_repair_request")
 def employee_request_repair(request):
     employee = _employee_for_user(request.user)
     devices = Device.objects.filter(assigned_employee=employee, is_deleted=False).exclude(status__in=["RETIRED", "MISSING", "DECOMMISSIONED"]) if employee else Device.objects.none()
@@ -2375,7 +2531,7 @@ def employee_request_repair(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE", "BRANCH_MANAGER", "TECHNICIAN", "EMPLOYEE")
+@permission_required("view_my_repair_requests")
 def employee_repair_requests(request):
     employee = _employee_for_user(request.user)
     repairs = RepairRequest.objects.select_related("device", "approved_by", "employee").filter(employee=employee).order_by("-request_date") if employee else RepairRequest.objects.none()
@@ -2388,7 +2544,7 @@ def employee_repair_requests(request):
 # =========================
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_employee")
 def head_office_employees(request):
     """Employee management view."""
     show_deleted = request.GET.get("deleted") == "1"
@@ -2397,13 +2553,15 @@ def head_office_employees(request):
     ).prefetch_related('device_set').filter(is_deleted=show_deleted)
     branches = Branch.objects.filter(is_deleted=False)
     departments = Department.objects.filter(is_deleted=False)
-    users = User.objects.filter(role__in=['EMPLOYEE', 'BRANCH_MANAGER', 'TECHNICIAN'])
+    users = User.objects.exclude(role="HEAD_OFFICE")
+    role_options = Role.objects.exclude(code="HEAD_OFFICE").order_by("is_system", "name")
     
     context = {
         'employees': employees,
         'branches': branches,
         'departments': departments,
         'users': users,
+        'role_options': role_options,
         'statuses': Employee._meta.get_field('status').choices,
         'show_deleted': show_deleted,
     }
@@ -2411,7 +2569,7 @@ def head_office_employees(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_branch")
 def head_office_branches(request):
     """Branch and department management view."""
     show_deleted = request.GET.get("deleted") == "1"
@@ -2429,7 +2587,7 @@ def head_office_branches(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_department")
 def head_office_departments(request):
     """Global department registration view."""
     show_deleted = request.GET.get("deleted") == "1"
@@ -2451,7 +2609,7 @@ def head_office_departments(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_device")
 def head_office_devices(request):
     """Device management view."""
     show_deleted = request.GET.get("deleted") == "1"
@@ -2488,7 +2646,7 @@ def head_office_devices(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_assignment")
 def head_office_assignments(request):
     """Device assignment management view."""
     assignments = DeviceAssignment.objects.select_related(
@@ -2517,7 +2675,7 @@ def head_office_assignments(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_repairs")
 def head_office_repairs(request):
     """Repair request management view."""
     repairs = RepairRequest.objects.select_related(
@@ -2545,14 +2703,14 @@ def head_office_repairs(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_device_audit")
 def head_office_audit_device(request):
     """Full lifecycle audit view for a device."""
     return render(request, "HeadOffice/AuditDevice.html", _device_audit_context(request))
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_inventory")
 def head_office_inventory(request):
     """Inventory management view."""
     show_deleted = request.GET.get("deleted") == "1"
@@ -2571,7 +2729,7 @@ def head_office_inventory(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_inventory")
 def head_office_inventory_detail(request, session_id):
     """Dedicated inventory session details page."""
     session = get_object_or_404(InventorySession.objects.select_related("branch", "created_by").prefetch_related(
@@ -2644,7 +2802,7 @@ def head_office_inventory_detail(request, session_id):
 
 
 @login_required
-@role_required("BRANCH_MANAGER")
+@permission_required("view_branch_devices")
 def branch_devices(request):
     employee = _employee_for_user(request.user)
     branch = employee.branch if employee else None
@@ -2653,7 +2811,7 @@ def branch_devices(request):
 
 
 @login_required
-@role_required("BRANCH_MANAGER")
+@permission_required("view_branch_employees")
 def branch_employees(request):
     employee = _employee_for_user(request.user)
     branch = employee.branch if employee else None
@@ -2662,7 +2820,7 @@ def branch_employees(request):
 
 
 @login_required
-@role_required("BRANCH_MANAGER")
+@permission_required("participate_inventory_verification")
 def branch_inventory_verification(request):
     employee = _employee_for_user(request.user)
     branch = employee.branch if employee else None
@@ -2673,7 +2831,7 @@ def branch_inventory_verification(request):
 
 
 @login_required
-@role_required("BRANCH_MANAGER")
+@permission_required("view_branch_reports")
 def branch_reports(request):
     employee = _employee_for_user(request.user)
     branch = employee.branch if employee else None
@@ -2748,7 +2906,7 @@ def _report_export_response(export_type, context):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_reports")
 def head_office_reports(request):
     """Head Office reports with filters, summaries, and exports."""
     employees = Employee.objects.select_related("branch", "department", "user").all()
@@ -2804,7 +2962,7 @@ def head_office_reports(request):
 
 
 @login_required
-@role_required("HEAD_OFFICE")
+@permission_required("view_audit_logs")
 def head_office_audit_logs(request):
     """Audit logs view."""
     audit_logs = AuditLog.objects.select_related('user').all().order_by('-timestamp')
@@ -2823,3 +2981,26 @@ def head_office_audit_logs(request):
         'selected_action': action,
     }
     return render(request, "HeadOffice/AuditLogs.html", context)
+
+
+@login_required
+@permission_required("view_access_control")
+def access_control_roles(request):
+    roles = Role.objects.prefetch_related("permissions", "users").all()
+    modules = Module.objects.prefetch_related("permissions").all()
+    return render(request, "HeadOffice/AccessControlRoles.html", {"roles": roles, "modules": modules})
+
+
+@login_required
+@permission_required("manage_permissions")
+def access_control_permissions(request):
+    modules = Module.objects.prefetch_related("permissions").all()
+    return render(request, "HeadOffice/AccessControlPermissions.html", {"modules": modules})
+
+
+@login_required
+@permission_required("assign_role")
+def access_control_assignments(request):
+    employees = Employee.objects.select_related("user", "branch", "department").filter(is_deleted=False)
+    roles = Role.objects.all().order_by("is_system", "name")
+    return render(request, "HeadOffice/AccessControlAssignments.html", {"employees": employees, "roles": roles})

@@ -9,7 +9,7 @@ from django.utils import timezone
 # USER MANAGER
 # =========================
 class UserManager(BaseUserManager):
-    def create_user(self, username, email, password=None, role='EMPLOYEE'):
+    def create_user(self, username, email, password=None, role='EMPLOYEE', dynamic_role=None):
         if not email:
             raise ValueError("User must have an email")
 
@@ -18,7 +18,8 @@ class UserManager(BaseUserManager):
         user = self.model(
             username=username,
             email=email,
-            role=role
+            role=role,
+            dynamic_role=dynamic_role,
         )
 
         user.set_password(password)
@@ -31,6 +32,60 @@ class UserManager(BaseUserManager):
         user.is_superuser = True
         user.save(using=self._db)
         return user
+
+
+class Module(models.Model):
+    key = models.SlugField(max_length=100, unique=True)
+    module_name = models.CharField(max_length=150, unique=True)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["module_name"]
+
+    def __str__(self):
+        return self.module_name
+
+
+class Permission(models.Model):
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name="permissions")
+    codename = models.SlugField(max_length=100, unique=True)
+    permission_name = models.CharField(max_length=150)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["module__module_name", "permission_name"]
+        unique_together = ("module", "permission_name")
+
+    def __str__(self):
+        return f"{self.module.module_name}: {self.permission_name}"
+
+
+class Role(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=50, unique=True, null=True, blank=True)
+    description = models.TextField(blank=True)
+    is_system = models.BooleanField(default=False)
+    permissions = models.ManyToManyField(Permission, through="RolePermission", related_name="roles", blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class RolePermission(models.Model):
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="role_permissions")
+    permission = models.ForeignKey(Permission, on_delete=models.CASCADE, related_name="role_permissions")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("role", "permission")
+
+    def __str__(self):
+        return f"{self.role} - {self.permission}"
 
 
 # =========================
@@ -47,7 +102,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     username = models.CharField(max_length=150, unique=True)
     email = models.EmailField(unique=True)
 
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='EMPLOYEE')
+    role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='EMPLOYEE')
+    dynamic_role = models.ForeignKey(
+        Role,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="users",
+    )
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -62,6 +124,15 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.username
+
+    @property
+    def effective_role_name(self):
+        return self.dynamic_role.name if self.dynamic_role else self.get_role_display()
+
+    def has_app_permission(self, codename):
+        from .access_control import user_has_permission
+
+        return user_has_permission(self, codename)
 
 
 class SoftDeleteModel(models.Model):
