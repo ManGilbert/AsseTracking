@@ -5,31 +5,53 @@
 {% block content %}
 <div class="main-content">
     <div class="page-header">
-        <div class="page-header-title">
-            <h5 class="m-b-10">Permissions Management</h5>
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Permissions Management</h5>
+            </div>
         </div>
     </div>
 
     <div class="main-content-body">
-        {% for module in modules %}
-        <section class="mb-4">
-            <h6 class="fw-bold">{{ module.module_name }}</h6>
-            <p class="text-muted mb-2">{{ module.description }}</p>
+        <div class="card">
+            <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+                <h5 class="mb-0">Module Permissions</h5>
+                <div class="input-group" style="max-width: 380px;">
+                    <span class="input-group-text"><i class="feather-search"></i></span>
+                    <input type="search" class="form-control" id="searchPermissions" data-table-search="#permissionsTable" placeholder="Search modules or permissions...">
+                </div>
+            </div>
             <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead><tr><th>Permission</th><th>Codename</th></tr></thead>
-                    <tbody>
-                        {% for permission in module.permissions.all %}
+                <table class="table table-hover align-middle mb-0" id="permissionsTable">
+                    <thead>
                         <tr>
-                            <td>{{ permission.permission_name }}</td>
-                            <td><code>{{ permission.codename }}</code></td>
+                            <th>Module</th>
+                            <th>Description</th>
+                            <th>Permissions</th>
                         </tr>
+                    </thead>
+                    <tbody>
+                        {% for module in modules %}
+                        <tr data-search-row-id="{{ module.id }}">
+                            <td class="fw-semibold">{{ module.module_name }}</td>
+                            <td>{{ module.description|default:"-" }}</td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% for permission in module.permissions.all %}
+                                    <span class="badge bg-soft-secondary text-dark border">{{ permission.permission_name }}</span>
+                                    {% empty %}
+                                    <span class="text-muted">No permissions configured</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center py-4 text-muted">No modules available.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-        </section>
-        {% endfor %}
+        </div>
     </div>
 </div>
 {% endblock %}

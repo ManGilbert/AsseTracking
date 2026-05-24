@@ -5,46 +5,118 @@
 {% block content %}
 <div class="main-content">
     <div class="page-header">
-        <div class="page-header-title">
-            <h5 class="m-b-10">Role Assignment</h5>
+        <div class="page-header-left d-flex align-items-center">
+            <div class="page-header-title">
+                <h5 class="m-b-10">Role Assignment</h5>
+            </div>
         </div>
     </div>
 
     <div class="main-content-body">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th>Employee</th>
-                        <th>Branch</th>
-                        <th>Current Role</th>
-                        <th>Update Role</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for employee in employees %}
-                    <tr>
-                        <td>{{ employee.full_name }}</td>
-                        <td>{{ employee.branch.name|default:"-" }}</td>
-                        <td>{{ employee.user.effective_role_name|default:"-" }}</td>
-                        <td>
-                            {% if employee.user %}
-                            <div class="input-group input-group-sm">
-                                <select class="form-select assignment-role" data-user-id="{{ employee.user.id }}">
-                                    {% for role in roles %}
-                                    <option value="{{ role.id }}" {% if employee.user.dynamic_role_id == role.id or employee.user.role == role.code %}selected{% endif %}>{{ role.name }}</option>
-                                    {% endfor %}
-                                </select>
-                                <button class="btn btn-outline-primary assign-role-btn" type="button" data-user-id="{{ employee.user.id }}">
-                                    <i class="feather-save"></i>
+        <div class="card">
+            <div class="card-header d-flex flex-column flex-md-row gap-3 justify-content-between align-items-md-center">
+                <h5 class="mb-0">Employees</h5>
+                <div class="input-group" style="max-width: 380px;">
+                    <span class="input-group-text"><i class="feather-search"></i></span>
+                    <input type="search" class="form-control" id="searchAssignments" data-table-search="#roleAssignmentsTable" placeholder="Search employees...">
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="roleAssignmentsTable">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Branch</th>
+                            <th>Department</th>
+                            <th>Current Role</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for employee in employees %}
+                        <tr data-search-row-id="{{ employee.id }}">
+                            <td>
+                                <button class="btn btn-link p-0 fw-semibold text-decoration-none" type="button" onclick="openEmployeeActivity({{ employee.id }})">
+                                    {{ employee.full_name }}
                                 </button>
-                            </div>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                                <div class="text-muted small">{{ employee.employee_id|default:"No employee ID" }}</div>
+                            </td>
+                            <td>{{ employee.branch.name|default:"-" }}</td>
+                            <td>{{ employee.department.name|default:"-" }}</td>
+                            <td>{{ employee.user.effective_role_name|default:"-" }}</td>
+                            <td class="text-end">
+                                {% if employee.user %}
+                                <button class="btn btn-sm btn-outline-primary" type="button"
+                                    onclick="openAssignmentModal('{{ employee.user.id }}', '{{ employee.full_name|escapejs }}', '{% if employee.user.dynamic_role_id %}{{ employee.user.dynamic_role_id }}{% else %}{{ employee.user.role }}{% endif %}')">
+                                    <i class="feather-user-check me-1"></i>Update Role
+                                </button>
+                                {% else %}
+                                <span class="text-muted">No login account</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-4 text-muted">No employees available.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="assignmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form class="modal-content" id="assignmentForm">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Employee Role</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assignmentUserId">
+                <div class="mb-3">
+                    <label class="form-label">Employee</label>
+                    <input type="text" class="form-control" id="assignmentEmployeeName" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Role</label>
+                    <select class="form-select" id="assignmentRoleId" required>
+                        {% for role in roles %}
+                        <option value="{{ role.id }}" data-code="{{ role.code|default:'' }}">{{ role.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="saveAssignmentButton">Save Assignment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="employeeActivityModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Employee Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="employeeActivityLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+                <div id="employeeActivityContent" class="d-none">
+                    <div class="row g-3 mb-4" id="employeeDetailsGrid"></div>
+                    <h6 class="fw-bold mb-3">Activity History</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0" data-no-pagination="true">
+                            <thead><tr><th>Time</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+                            <tbody id="employeeActivityRows"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -56,19 +128,76 @@ function getCookie(name) {
     if (parts.length === 2) return parts.pop().split(';').shift();
 }
 
-document.querySelectorAll('.assign-role-btn').forEach(button => {
-    button.addEventListener('click', function () {
-        const userId = this.dataset.userId;
-        const roleId = document.querySelector(`.assignment-role[data-user-id="${userId}"]`).value;
-        fetch(`/api/roles/${roleId}/assign_user/`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
-            body: JSON.stringify({user_id: userId})
-        }).then(response => {
-            if (response.ok) location.reload();
-            return response.json().then(data => alert(JSON.stringify(data)));
-        });
+function openAssignmentModal(userId, employeeName, currentRole) {
+    document.getElementById('assignmentUserId').value = userId;
+    document.getElementById('assignmentEmployeeName').value = employeeName;
+    const select = document.getElementById('assignmentRoleId');
+    Array.from(select.options).forEach(option => {
+        option.selected = option.value === currentRole || option.dataset.code === currentRole;
+    });
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('assignmentModal')).show();
+}
+
+document.getElementById('assignmentForm').addEventListener('submit', function (event) {
+    event.preventDefault();
+    const roleId = document.getElementById('assignmentRoleId').value;
+    const userId = document.getElementById('assignmentUserId').value;
+    const button = document.getElementById('saveAssignmentButton');
+    button.disabled = true;
+    fetch(`/api/roles/${roleId}/assign_user/`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+        body: JSON.stringify({user_id: userId})
+    }).then(response => {
+        button.disabled = false;
+        if (response.ok) {
+            return showAppMessage('Role assignment updated successfully.', 'Success', 'success').then(() => {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('assignmentModal')).hide();
+                location.reload();
+            });
+        }
+        return response.json().then(data => showAppMessage(JSON.stringify(data), 'Error', 'error'));
     });
 });
+
+function detailItem(label, value) {
+    return `<div class="col-md-6"><div class="text-muted small">${label}</div><div class="fw-semibold">${value || '-'}</div></div>`;
+}
+
+function openEmployeeActivity(employeeId) {
+    const modalElement = document.getElementById('employeeActivityModal');
+    const loading = document.getElementById('employeeActivityLoading');
+    const content = document.getElementById('employeeActivityContent');
+    loading.classList.remove('d-none');
+    content.classList.add('d-none');
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    fetch(`/api/employees/${employeeId}/activity/`)
+        .then(response => response.json())
+        .then(data => {
+            const employee = data.employee || {};
+            document.getElementById('employeeDetailsGrid').innerHTML = [
+                detailItem('Employee ID', employee.employee_id),
+                detailItem('Full Name', employee.full_name),
+                detailItem('Position', employee.position),
+                detailItem('Role', employee.role),
+                detailItem('Branch', employee.branch),
+                detailItem('Department', employee.department),
+                detailItem('Username', employee.username),
+                detailItem('Email', employee.email)
+            ].join('');
+            const rows = (data.activity || []).map(item => `
+                <tr>
+                    <td>${new Date(item.timestamp).toLocaleString()}</td>
+                    <td>${item.action}</td>
+                    <td>${item.model_name}${item.object_id ? ` #${item.object_id}` : ''}</td>
+                    <td>${item.details || '-'}</td>
+                </tr>
+            `).join('');
+            document.getElementById('employeeActivityRows').innerHTML = rows || '<tr><td colspan="4" class="text-center text-muted py-4">No activity recorded.</td></tr>';
+            loading.classList.add('d-none');
+            content.classList.remove('d-none');
+        })
+        .catch(() => showAppMessage('Unable to load employee activity.', 'Error', 'error'));
+}
 </script>
 {% endblock %}

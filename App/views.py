@@ -281,7 +281,37 @@ class RoleViewSet(viewsets.ModelViewSet):
             return Response({"error": "System roles cannot be deleted."}, status=status.HTTP_400_BAD_REQUEST)
         if role.users.exists():
             return Response({"error": "Remove this role from users before deleting it."}, status=status.HTTP_400_BAD_REQUEST)
-        return super().destroy(request, *args, **kwargs)
+        role_id = role.id
+        role_name = role.name
+        response = super().destroy(request, *args, **kwargs)
+        AuditService.log_action(request.user, "ROLE_DELETED", "Role", role_id, f"Role deleted: {role_name}")
+        return response
+
+    def perform_create(self, serializer):
+        role = serializer.save()
+        permission_names = ", ".join(role.permissions.values_list("permission_name", flat=True))
+        AuditService.log_action(
+            self.request.user,
+            "ROLE_CREATED",
+            "Role",
+            role.id,
+            f"Role created: {role.name}; permissions: {permission_names or 'none'}",
+        )
+
+    def perform_update(self, serializer):
+        role = self.get_object()
+        before = set(role.permissions.values_list("codename", flat=True))
+        role = serializer.save()
+        after = set(role.permissions.values_list("codename", flat=True))
+        added = sorted(after - before)
+        removed = sorted(before - after)
+        AuditService.log_action(
+            self.request.user,
+            "ROLE_UPDATED",
+            "Role",
+            role.id,
+            f"Role updated: {role.name}; added permissions: {', '.join(added) or 'none'}; removed permissions: {', '.join(removed) or 'none'}",
+        )
 
     @action(detail=False, methods=["get"])
     def options(self, request):
@@ -328,6 +358,20 @@ class ModuleViewSet(viewsets.ModelViewSet):
             return [HasAppPermission("manage_permissions")]
         return [HasAppPermission("view_access_control")]
 
+    def perform_create(self, serializer):
+        module = serializer.save()
+        AuditService.log_action(self.request.user, "MODULE_CREATED", "Module", module.id, f"Module created: {module.module_name}")
+
+    def perform_update(self, serializer):
+        module = serializer.save()
+        AuditService.log_action(self.request.user, "MODULE_UPDATED", "Module", module.id, f"Module updated: {module.module_name}")
+
+    def perform_destroy(self, instance):
+        module_id = instance.id
+        module_name = instance.module_name
+        instance.delete()
+        AuditService.log_action(self.request.user, "MODULE_DELETED", "Module", module_id, f"Module deleted: {module_name}")
+
 
 class PermissionViewSet(viewsets.ModelViewSet):
     queryset = Permission.objects.select_related("module")
@@ -342,6 +386,38 @@ class PermissionViewSet(viewsets.ModelViewSet):
         if self.action in ["create", "update", "partial_update", "destroy"]:
             return [HasAppPermission("manage_permissions")]
         return [HasAppPermission("view_access_control")]
+
+    def perform_create(self, serializer):
+        permission = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "PERMISSION_CREATED",
+            "Permission",
+            permission.id,
+            f"Permission created: {permission.permission_name} ({permission.codename})",
+        )
+
+    def perform_update(self, serializer):
+        permission = serializer.save()
+        AuditService.log_action(
+            self.request.user,
+            "PERMISSION_UPDATED",
+            "Permission",
+            permission.id,
+            f"Permission updated: {permission.permission_name} ({permission.codename})",
+        )
+
+    def perform_destroy(self, instance):
+        permission_id = instance.id
+        permission_name = instance.permission_name
+        instance.delete()
+        AuditService.log_action(
+            self.request.user,
+            "PERMISSION_DELETED",
+            "Permission",
+            permission_id,
+            f"Permission deleted: {permission_name}",
+        )
 
 
 class AccessControlViewSet(viewsets.ViewSet):
@@ -649,6 +725,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             "destroy",
             "set_exit_status",
             "reset_password",
+            "activity",
         ]:
             action_permissions = {
                 "create": "add_employee",
@@ -657,6 +734,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 "destroy": "delete_employee",
                 "set_exit_status": "update_employee",
                 "reset_password": "reset_employee_password",
+                "activity": "assign_role",
             }
             return [HasAppPermission(action_permissions[self.action])]
         return [IsAuthenticated()]
@@ -813,6 +891,39 @@ class EmployeeViewSet(viewsets.ModelViewSet):
                 "must_change_password": True,
             },
             status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["get"])
+    def activity(self, request, pk=None):
+        employee = self.get_object()
+        user = employee.user
+        logs = AuditLog.objects.select_related("user").filter(user=user).order_by("-timestamp")[:50] if user else []
+        return Response(
+            {
+                "employee": {
+                    "id": employee.id,
+                    "employee_id": employee.employee_id,
+                    "full_name": employee.full_name,
+                    "position": employee.position,
+                    "branch": employee.branch.name if employee.branch else None,
+                    "department": employee.department.name if employee.department else None,
+                    "status": employee.status,
+                    "role": user.effective_role_name if user else None,
+                    "username": user.username if user else None,
+                    "email": user.email if user else None,
+                    "date_joined": user.date_joined if user else None,
+                },
+                "activity": [
+                    {
+                        "action": log.action,
+                        "model_name": log.model_name,
+                        "object_id": log.object_id,
+                        "timestamp": log.timestamp,
+                        "details": log.details,
+                    }
+                    for log in logs
+                ],
+            }
         )
 
 
