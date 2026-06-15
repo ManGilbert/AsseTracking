@@ -72,7 +72,6 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
-
 class PermissionSerializer(serializers.ModelSerializer):
     module_name = serializers.CharField(source="module.module_name", read_only=True)
     module_key = serializers.CharField(source="module.key", read_only=True)
@@ -81,7 +80,6 @@ class PermissionSerializer(serializers.ModelSerializer):
         model = Permission
         fields = ("id", "module", "module_key", "module_name", "codename", "permission_name", "created_at")
         read_only_fields = ("id", "created_at")
-
 
 class ModuleSerializer(serializers.ModelSerializer):
     permissions = PermissionSerializer(many=True, read_only=True)

@@ -189,6 +189,13 @@ class HasAppPermission(permissions.BasePermission):
     def __init__(self, codename):
         self.codename = codename
 
+    def __call__(self):
+        # Allow instances to be called (defensive): return self so
+        # code that expects a callable permission (permission()) works
+        # even if an instance was accidentally placed in
+        # `permission_classes`.
+        return self
+
     def has_permission(self, request, view):
         return user_has_permission(request.user, self.codename)
 
@@ -201,3 +208,7 @@ class HasAnyAppPermission(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return any(user_has_permission(request.user, codename) for codename in self.codenames)
+
+    def __call__(self):
+        # Same defensive callable behavior as HasAppPermission
+        return self

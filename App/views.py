@@ -2002,7 +2002,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     queryset = AuditLog.objects.all()
     serializer_class = AuditLogSerializer
-    permission_classes = [HasAppPermission("view_audit_logs")]
+    permission_classes = [IsAuthenticated]
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -2011,6 +2011,9 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ["action", "model_name"]
     search_fields = ["action", "details"]
     ordering = ["-timestamp"]
+
+    def get_permissions(self):
+        return [HasAppPermission("view_audit_logs")]
 
 
 def _get_dashboard_url(role):
